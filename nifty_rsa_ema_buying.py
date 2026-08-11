@@ -66,6 +66,7 @@ SYMBOL = "NIFTY"
 CE_ID = None
 PE_ID = None
 
+combined_pnl = 0
 load_dotenv()
 
 STRATEGY_NAME = "NIFTY_OPTION_BUYING_50 no reentry"
@@ -914,12 +915,14 @@ def handle_leg(state, candle):
     print("✅ Signal Candle Created")
 
 def manage_positions(state, ltp):
+    
     """
     Handles:
     1. Entry
     2. Target Exit
     3. Stop Loss Exit
     """
+    global combined_pnl
 
     # ==========================
     # ENTRY
@@ -1003,7 +1006,7 @@ def manage_positions(state, ltp):
 
         state["pnl"] += pnl
 
-        global combined_pnl
+        
         combined_pnl += pnl
 
         print(
