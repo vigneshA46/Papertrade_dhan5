@@ -1134,6 +1134,8 @@ def on_message(msg):
     if msg.get("type") != "Quote Data":
         return
 
+    print(msg)
+
     token = str(msg["security_id"])
     ltp = float(msg.get("LTP", 0))
 
@@ -1387,8 +1389,8 @@ print("PE RSI14 :", pe_state["rsi14"])
 
 
 instruments = [
-    (MarketFeed.NSE_FNO, str(ce_security_id), MarketFeed.Quote),
-    (MarketFeed.NSE_FNO, str(pe_security_id), MarketFeed.Quote)
+    (MarketFeed.NSE_FNO, ce_security_id, MarketFeed.Quote),
+    (MarketFeed.NSE_FNO, pe_security_id, MarketFeed.Quote)
 ]
 
 feed = MarketFeed(dhan_context, instruments, "v2")
