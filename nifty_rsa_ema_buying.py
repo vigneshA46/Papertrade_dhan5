@@ -69,6 +69,9 @@ PE_ID = None
 combined_pnl = 0
 load_dotenv()
 
+CE_ID = None
+PE_ID = None
+
 STRATEGY_NAME = "NIFTY_OPTION_BUYING_50 no reentry"
 MARKET_OPEN = dtime(9, 15)
 MARKET_CLOSE = dtime(15, 14)
@@ -1134,7 +1137,6 @@ def on_message(msg):
     if msg.get("type") != "Quote Data":
         return
 
-    print(msg)
 
     token = str(msg["security_id"])
     ltp = float(msg.get("LTP", 0))
@@ -1279,8 +1281,8 @@ ce_state = init_state()
 pe_state = init_state()
 
 builders = {
-    ce_security_id: OneMinuteCandleBuilder(),
-    pe_security_id: OneMinuteCandleBuilder()
+    CE_ID: OneMinuteCandleBuilder(),
+    PE_ID: OneMinuteCandleBuilder()
 }
 
 
@@ -1405,7 +1407,6 @@ while True:
         feed.run_forever()
         msg = feed.get_data()
 
-        print(msg)
 
         if msg:
             on_message(msg)
