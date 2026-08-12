@@ -1389,8 +1389,8 @@ print("PE RSI14 :", pe_state["rsi14"])
 
 
 instruments = [
-    (MarketFeed.NSE_FNO, ce_security_id, MarketFeed.Quote),
-    (MarketFeed.NSE_FNO, pe_security_id, MarketFeed.Quote)
+    (MarketFeed.NSE_FNO, CE_ID, MarketFeed.Quote),
+    (MarketFeed.NSE_FNO, PE_ID, MarketFeed.Quote)
 ]
 
 feed = MarketFeed(dhan_context, instruments, "v2")
@@ -1404,6 +1404,8 @@ while True:
 
         feed.run_forever()
         msg = feed.get_data()
+
+        print(msg)
 
         if msg:
             on_message(msg)
