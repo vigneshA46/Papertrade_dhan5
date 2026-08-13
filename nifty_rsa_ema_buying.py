@@ -1200,6 +1200,8 @@ def on_message(msg):
                 period=21
                 )
 
+            print("EMA 9 CE", ce_state["ema9"] , "EMA 21 CE ", ce_state["ema21"])
+
             update_rsi(ce_state, candle)
             print("CE RSI :", ce_state["rsi14"])
 
@@ -1240,6 +1242,7 @@ def on_message(msg):
                 [c["close"] for c in pe_state["candles"]],
                 period=21
             )
+            print("EMA 9 PE", pe_state["ema9"] , "EMA 21 PE ", pe_state["ema21"])
 
             update_rsi(pe_state, candle)
             print("PE RSI :", pe_state["rsi14"])
