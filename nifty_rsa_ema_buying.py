@@ -876,6 +876,7 @@ def init_state():
         "target": None,              # Fibonacci target
         "stoploss": None,   
         "waiting_retest": False,
+        "waiting_for_breakout" : False,
         "trend": None,
         "last_ltp": None,
 
