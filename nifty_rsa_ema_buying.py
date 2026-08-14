@@ -513,19 +513,11 @@ def update_ema(state, candle):
 
 def update_rsi(state, candle, period=14):
     """
-    Updates RSI using Wilder's smoothing.
-
-    Requires:
-        state["avg_gain"]
-        state["avg_loss"]
-        state["rsi14"]
-        state["candles"]
-
-    Returns:
-        Latest RSI
+    Update RSI using the latest completed candle.
+    Uses Wilder's smoothing.
     """
 
-    if len(state["candles"]) == 0:
+    if state["avg_gain"] is None or state["avg_loss"] is None:
         return None
 
     previous_close = state["candles"][-1]["close"]
@@ -533,30 +525,38 @@ def update_rsi(state, candle, period=14):
 
     change = current_close - previous_close
 
-    gain = max(change, 0)
-    loss = max(-change, 0)
+    if change > 0:
+        gain = change
+        loss = 0.0
+    else:
+        gain = 0.0
+        loss = abs(change)
 
     avg_gain = (
-        (state["avg_gain"] * (period - 1)) + gain
+        ((period - 1) * state["avg_gain"]) + gain
     ) / period
 
     avg_loss = (
-        (state["avg_loss"] * (period - 1)) + loss
+        ((period - 1) * state["avg_loss"]) + loss
     ) / period
 
     state["avg_gain"] = avg_gain
     state["avg_loss"] = avg_loss
 
     if avg_loss == 0:
-        rsi = 100
+        rsi = 100.0
+
+    elif avg_gain == 0:
+        rsi = 0.0
+
     else:
         rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
+        rsi = 100.0 - (100.0 / (1.0 + rs))
 
     state["rsi14"] = rsi
 
     return rsi
-
+    
 def calculate_ema(closes, period=9):
 
     if len(closes) < period:
@@ -573,42 +573,57 @@ def calculate_ema(closes, period=9):
 
 def calculate_rsi(closes, period=14):
     """
-    Calculate initial RSI-14 using the latest candles.
+    Calculate RSI using Wilder's smoothing (RMA).
 
-    For RSI-14, 15 closing prices are required
-    to produce 14 price changes.
+    `closes` should contain only COMPLETED candles.
+
+    Returns:
+        rsi, avg_gain, avg_loss
     """
 
     if len(closes) < period + 1:
         return None, None, None
 
-    # Use only the latest 15 closes for RSI-14
-    closes = closes[-(period + 1):]
-
     gains = []
     losses = []
 
+    # Calculate all price changes
     for i in range(1, len(closes)):
         change = closes[i] - closes[i - 1]
 
         if change > 0:
             gains.append(change)
-            losses.append(0)
+            losses.append(0.0)
         else:
-            gains.append(0)
+            gains.append(0.0)
             losses.append(abs(change))
 
-    avg_gain = sum(gains) / period
-    avg_loss = sum(losses) / period
+    # Initial Wilder average
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
 
+    # Wilder smoothing through all remaining candles
+    for i in range(period, len(gains)):
+        avg_gain = (
+            ((period - 1) * avg_gain) + gains[i]
+        ) / period
+
+        avg_loss = (
+            ((period - 1) * avg_loss) + losses[i]
+        ) / period
+
+    # Calculate final RSI
     if avg_loss == 0:
         rsi = 100.0
+
+    elif avg_gain == 0:
+        rsi = 0.0
+
     else:
         rs = avg_gain / avg_loss
         rsi = 100.0 - (100.0 / (1.0 + rs))
 
-    return rsi, avg_gain, avg_loss
-    
+    return rsi, avg_gain, avg_loss    
 
 
 def is_market_holiday(check_date):
