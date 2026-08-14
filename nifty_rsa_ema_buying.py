@@ -1211,7 +1211,7 @@ def on_message(msg):
             print("EMA 9 CE", ce_state["ema9"] , "EMA 21 CE ", ce_state["ema21"])
 
             ce_state["rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
-                [c["close"] for c in ce_state["candles"]],
+                [c["close"] for c in ema_candles],
                 period=14
                 )
             print("CE RSI :", ce_state["rsi14"])
@@ -1258,7 +1258,7 @@ def on_message(msg):
             print("EMA 9 PE", pe_state["ema9"] , "EMA 21 PE ", pe_state["ema21"])
 
             pe_state["rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
-                [c["close"] for c in pe_state["candles"]],
+                [c["close"] for c in peema_candles],
                 period=14
             )
             print("PE RSI :", pe_state["rsi14"])
@@ -1386,7 +1386,7 @@ ce_state["ema21"] = calculate_ema(
 print("CE EMA21 :", ce_state["ema21"])
 
 ce_state["rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
-    [c["close"] for c in ce_state["candles"]],
+    [c["close"] for c in ema_candles],
     period=14
 )
 
@@ -1410,7 +1410,7 @@ pe_state["ema21"] = calculate_ema(
 print("PE EMA21 :", pe_state["ema21"])
 
 pe_state["rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
-    [c["close"] for c in pe_state["candles"]],
+    [c["close"] for c in peema_candles],
     period=14
 )
 
