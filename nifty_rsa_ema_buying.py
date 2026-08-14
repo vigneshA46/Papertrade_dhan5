@@ -439,7 +439,7 @@ def select_option_contracts(oc, max_ltp=OPTION_SELECTION_LTP):
     )
 
 
-def load_history(security_id, candle_count=10):
+def load_history(security_id, candle_count=200):
 
     start_time, end_time = get_market_history_window(
         candle_count=candle_count,
@@ -1186,18 +1186,21 @@ def on_message(msg):
             ce_state["previous_ema9"] = ce_state["ema9"]
             ce_state["previous_ema21"] = ce_state["ema21"]
 
+
             ce_state["candles"] = load_history(
                 ce_security_id,
-                candle_count=22
+                candle_count=200
             )
 
+            ema_candles = ce_state["candles"][:-1]
+
             ce_state["ema9"] = calculate_ema(
-                [c["close"] for c in ce_state["candles"]],
+                [c["close"] for c in ema_candles],
                 period=9
             )
 
             ce_state["ema21"] = calculate_ema(
-               [c["close"] for c in ce_state["candles"]],
+               [c["close"] for c in ema_candles],
                 period=21
                 )
 
@@ -1231,16 +1234,18 @@ def on_message(msg):
 
             pe_state["candles"] = load_history(
                 pe_security_id,
-                candle_count=22
+                candle_count=200
             )
 
+            peema_candles = pe_state["candles"][:-1]
+            
             pe_state["ema9"] = calculate_ema(
-                [c["close"] for c in pe_state["candles"]],
+                [c["close"] for c in peema_candles],
                 period=9
             )
 
             pe_state["ema21"] = calculate_ema(
-                [c["close"] for c in pe_state["candles"]],
+                [c["close"] for c in peema_candles],
                 period=21
             )
             print("EMA 9 PE", pe_state["ema9"] , "EMA 21 PE ", pe_state["ema21"])
@@ -1333,7 +1338,7 @@ logtradeleg(
 
 ce_state["candles"] = load_history(
     ce_security_id,
-    candle_count=22
+    candle_count=200
 )
 
 #print("\nCE Historical Candles\n")
@@ -1343,7 +1348,7 @@ ce_state["candles"] = load_history(
 
 pe_state["candles"] = load_history(
     pe_security_id,
-    candle_count=22
+    candle_count=200
 )
 
 #print("\nPE Historical Candles\n")
@@ -1351,17 +1356,22 @@ pe_state["candles"] = load_history(
 #for candle in pe_state["candles"]:
 #    print(candle)
 
+
+ema_candles = ce_state["candles"][:-1]
+
 ce_state["ema9"] = calculate_ema(
-    [c["close"] for c in ce_state["candles"]],
+    [c["close"] for c in ema_candles],
     period=9
 )
+
 
 print("CE EMA9 :", ce_state["ema9"])
 
 ce_state["ema21"] = calculate_ema(
-    [c["close"] for c in ce_state["candles"]],
+    [c["close"] for c in ema_candles],
     period=21
 )
+
 
 print("CE EMA21 :", ce_state["ema21"])
 
@@ -1372,15 +1382,18 @@ ce_state["rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
 
 print("CE RSI14 :", ce_state["rsi14"])
 
+peema_candles = pe_state["candles"][:-1]
+
+
 pe_state["ema9"] = calculate_ema(
-    [c["close"] for c in pe_state["candles"]],
+    [c["close"] for c in peema_candles],
     period=9
 )
 
 print("PE EMA9 :", pe_state["ema9"])
 
 pe_state["ema21"] = calculate_ema(
-    [c["close"] for c in pe_state["candles"]],
+    [c["close"] for c in peema_candles],
     period=21
 )
 
