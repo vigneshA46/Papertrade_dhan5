@@ -837,6 +837,8 @@ def detect_ema_bullish_crossover(state):
         state["ema9"] > state["ema21"]
     )
 
+    print("EMA Crossover Detected:")
+
     state["crossover_happened"] = crossover
 
     return crossover
@@ -1238,7 +1240,7 @@ def on_message(msg):
             )
 
             peema_candles = pe_state["candles"][:-1]
-            
+
             pe_state["ema9"] = calculate_ema(
                 [c["close"] for c in peema_candles],
                 period=9
