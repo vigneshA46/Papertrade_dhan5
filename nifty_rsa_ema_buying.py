@@ -573,19 +573,22 @@ def calculate_ema(closes, period=9):
 
 def calculate_rsi(closes, period=14):
     """
-    Calculates initial RSI using Wilder's method.
+    Calculate initial RSI-14 using the latest candles.
 
-    Returns:
-        rsi, avg_gain, avg_loss
+    For RSI-14, 15 closing prices are required
+    to produce 14 price changes.
     """
 
     if len(closes) < period + 1:
         return None, None, None
 
+    # Use only the latest 15 closes for RSI-14
+    closes = closes[-(period + 1):]
+
     gains = []
     losses = []
 
-    for i in range(1, period + 1):
+    for i in range(1, len(closes)):
         change = closes[i] - closes[i - 1]
 
         if change > 0:
@@ -598,15 +601,14 @@ def calculate_rsi(closes, period=14):
     avg_gain = sum(gains) / period
     avg_loss = sum(losses) / period
 
-    # Prevent divide-by-zero
     if avg_loss == 0:
-        rsi = 100
+        rsi = 100.0
     else:
         rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
+        rsi = 100.0 - (100.0 / (1.0 + rs))
 
     return rsi, avg_gain, avg_loss
-
+    
 
 
 def is_market_holiday(check_date):
@@ -1208,7 +1210,10 @@ def on_message(msg):
 
             print("EMA 9 CE", ce_state["ema9"] , "EMA 21 CE ", ce_state["ema21"])
 
-            update_rsi(ce_state, candle)
+            ce_state["rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
+                [c["close"] for c in ce_state["candles"]],
+                period=14
+                )
             print("CE RSI :", ce_state["rsi14"])
 
             detect_ema_bullish_crossover(ce_state)
@@ -1252,7 +1257,10 @@ def on_message(msg):
             )
             print("EMA 9 PE", pe_state["ema9"] , "EMA 21 PE ", pe_state["ema21"])
 
-            update_rsi(pe_state, candle)
+            pe_state["rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
+                [c["close"] for c in pe_state["candles"]],
+                period=14
+            )
             print("PE RSI :", pe_state["rsi14"])
 
             detect_ema_bullish_crossover(pe_state)
