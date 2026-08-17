@@ -1215,6 +1215,8 @@ def on_message(msg):
                 candle_count=200
             )
 
+            print("CE candles loaded")
+
             ema_candles = ce_state["candles"][:-2]
 
             ce_state["ema9"] = calculate_ema(
