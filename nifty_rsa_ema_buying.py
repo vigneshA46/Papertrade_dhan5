@@ -589,6 +589,7 @@ def calculate_rsi(closes, period=14):
             100.0 / (1.0 + rs)
         )
 
+    print("RSI from local function ", rsi)
     return rsi, avg_gain, avg_loss
 
 def update_rsi(state, candle, period=14):
