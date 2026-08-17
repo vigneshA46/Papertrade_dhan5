@@ -751,7 +751,7 @@ def get_last_market_time():
     # After market closes
     return market_close
 
-def get_market_history_window(candle_count=10, interval=1):
+def get_market_history_window(candle_count=200, interval=1):
     """
     Returns the history window required
     to fetch the last completed market candles.
@@ -765,6 +765,9 @@ def get_market_history_window(candle_count=10, interval=1):
         end_time,
         required_minutes
     )
+
+    print("Start time ", start_time)
+    print("end time" , end_time)
 
     return start_time, end_time
 
