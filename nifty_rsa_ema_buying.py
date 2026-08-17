@@ -489,7 +489,7 @@ def load_history(security_id, candle_count=200):
 
     #print(f"Loaded {len(candles)} historical candles")
 
-    return candles[-candle_count:]
+    return candles[-candle_count-1:-1]
 
 
 def update_ema(state, candle):
