@@ -441,6 +441,8 @@ def select_option_contracts(oc, max_ltp=OPTION_SELECTION_LTP):
 
 def load_history(security_id, candle_count=200):
 
+    print("Load history called")
+
     start_time, end_time = get_market_history_window(
         candle_count=candle_count,
         interval=1
