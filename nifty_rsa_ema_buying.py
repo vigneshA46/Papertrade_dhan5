@@ -1230,7 +1230,7 @@ def on_message(msg):
             print("EMA 9 CE", ce_state["ema9"] , "EMA 21 CE ", ce_state["ema21"])
 
             # Update RSI using previous candle -> current candle
-            update_rsi(ce_state, ce_candle)
+            update_rsi(ce_state, candle)
 
             # Now append the completed candle
             ce_state["candles"].append(ce_candle)
@@ -1279,7 +1279,7 @@ def on_message(msg):
             )
             print("EMA 9 PE", pe_state["ema9"] , "EMA 21 PE ", pe_state["ema21"])
 
-            update_rsi(pe_state, pe_candle)
+            update_rsi(pe_state, candle)
 
             pe_state["candles"].append(pe_candle)
             
