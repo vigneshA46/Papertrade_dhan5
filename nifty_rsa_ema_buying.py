@@ -1397,7 +1397,7 @@ pe_state["candles"] = load_history(
 #    print(candle)
 
 
-ema_candles = ce_state["candles"][:-1]
+ema_candles = ce_state["candles"]
 
 ce_state["ema9"] = calculate_ema(
     [c["close"] for c in ema_candles],
@@ -1427,7 +1427,7 @@ print(
 
 print("CE RSI14 :", ce_state["rsi14"])
 
-peema_candles = pe_state["candles"][:-1]
+peema_candles = pe_state["candles"]
 
 
 pe_state["ema9"] = calculate_ema(
