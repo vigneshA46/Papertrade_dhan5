@@ -510,12 +510,88 @@ def update_ema(state, candle):
         state["candles"].pop(0)
 
     return new_ema
+    
+def calculate_ema(closes, period=9):
+
+    if len(closes) < period:
+        return None
+
+    multiplier = 2 / (period + 1)
+
+    ema = sum(closes[:period]) / period
+
+    for close in closes[period:]:
+        ema = ((close - ema) * multiplier) + ema
+
+    return ema
+
+
+def calculate_rsi(closes, period=14):
+    """
+    Calculates RSI-14 using Wilder's smoothing method.
+
+    Returns:
+        rsi, avg_gain, avg_loss
+    """
+
+    if len(closes) < period + 1:
+        return None, None, None
+
+    gains = []
+    losses = []
+
+    # ---------------------------------
+    # Calculate gains and losses
+    # ---------------------------------
+    for i in range(1, len(closes)):
+
+        change = closes[i] - closes[i - 1]
+
+        if change > 0:
+            gains.append(change)
+            losses.append(0.0)
+
+        else:
+            gains.append(0.0)
+            losses.append(abs(change))
+
+    # ---------------------------------
+    # Initial Wilder average
+    # First 14 changes
+    # ---------------------------------
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+
+    # ---------------------------------
+    # Wilder smoothing
+    # Remaining changes
+    # ---------------------------------
+    for i in range(period, len(gains)):
+
+        avg_gain = (
+            (avg_gain * (period - 1)) + gains[i]
+        ) / period
+
+        avg_loss = (
+            (avg_loss * (period - 1)) + losses[i]
+        ) / period
+
+    # ---------------------------------
+    # Calculate final RSI
+    # ---------------------------------
+    if avg_loss == 0:
+        rsi = 100.0
+
+    else:
+        rs = avg_gain / avg_loss
+
+        rsi = 100.0 - (
+            100.0 / (1.0 + rs)
+        )
+
+    return rsi, avg_gain, avg_loss
 
 def update_rsi(state, candle, period=14):
-    """
-    Update RSI using the latest completed candle.
-    Uses Wilder's smoothing.
-    """
 
     if state["avg_gain"] is None or state["avg_loss"] is None:
         return None
@@ -533,11 +609,11 @@ def update_rsi(state, candle, period=14):
         loss = abs(change)
 
     avg_gain = (
-        ((period - 1) * state["avg_gain"]) + gain
+        (state["avg_gain"] * (period - 1)) + gain
     ) / period
 
     avg_loss = (
-        ((period - 1) * state["avg_loss"]) + loss
+        (state["avg_loss"] * (period - 1)) + loss
     ) / period
 
     state["avg_gain"] = avg_gain
@@ -545,10 +621,6 @@ def update_rsi(state, candle, period=14):
 
     if avg_loss == 0:
         rsi = 100.0
-
-    elif avg_gain == 0:
-        rsi = 0.0
-
     else:
         rs = avg_gain / avg_loss
         rsi = 100.0 - (100.0 / (1.0 + rs))
@@ -556,74 +628,6 @@ def update_rsi(state, candle, period=14):
     state["rsi14"] = rsi
 
     return rsi
-    
-def calculate_ema(closes, period=9):
-
-    if len(closes) < period:
-        return None
-
-    multiplier = 2 / (period + 1)
-
-    ema = sum(closes[:period]) / period
-
-    for close in closes[period:]:
-        ema = ((close - ema) * multiplier) + ema
-
-    return ema
-
-def calculate_rsi(closes, period=14):
-    """
-    Calculate RSI using Wilder's smoothing (RMA).
-
-    `closes` should contain only COMPLETED candles.
-
-    Returns:
-        rsi, avg_gain, avg_loss
-    """
-
-    if len(closes) < period + 1:
-        return None, None, None
-
-    gains = []
-    losses = []
-
-    # Calculate all price changes
-    for i in range(1, len(closes)):
-        change = closes[i] - closes[i - 1]
-
-        if change > 0:
-            gains.append(change)
-            losses.append(0.0)
-        else:
-            gains.append(0.0)
-            losses.append(abs(change))
-
-    # Initial Wilder average
-    avg_gain = sum(gains[:period]) / period
-    avg_loss = sum(losses[:period]) / period
-
-    # Wilder smoothing through all remaining candles
-    for i in range(period, len(gains)):
-        avg_gain = (
-            ((period - 1) * avg_gain) + gains[i]
-        ) / period
-
-        avg_loss = (
-            ((period - 1) * avg_loss) + losses[i]
-        ) / period
-
-    # Calculate final RSI
-    if avg_loss == 0:
-        rsi = 100.0
-
-    elif avg_gain == 0:
-        rsi = 0.0
-
-    else:
-        rs = avg_gain / avg_loss
-        rsi = 100.0 - (100.0 / (1.0 + rs))
-
-    return rsi, avg_gain, avg_loss    
 
 
 def is_market_holiday(check_date):
@@ -1211,7 +1215,7 @@ def on_message(msg):
                 candle_count=200
             )
 
-            ema_candles = ce_state["candles"][:-1]
+            ema_candles = ce_state["candles"][:-2]
 
             ce_state["ema9"] = calculate_ema(
                 [c["close"] for c in ema_candles],
@@ -1225,10 +1229,13 @@ def on_message(msg):
 
             print("EMA 9 CE", ce_state["ema9"] , "EMA 21 CE ", ce_state["ema21"])
 
-            ce_state["rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
-                [c["close"] for c in ema_candles],
-                period=14
-                )
+            # Update RSI using previous candle -> current candle
+            update_rsi(ce_state, ce_candle)
+
+            # Now append the completed candle
+            ce_state["candles"].append(ce_candle)
+
+
             print("CE RSI :", ce_state["rsi14"])
 
             detect_ema_bullish_crossover(ce_state)
@@ -1259,7 +1266,7 @@ def on_message(msg):
                 candle_count=200
             )
 
-            peema_candles = pe_state["candles"][:-1]
+            peema_candles = pe_state["candles"][:-2]
 
             pe_state["ema9"] = calculate_ema(
                 [c["close"] for c in peema_candles],
@@ -1272,10 +1279,10 @@ def on_message(msg):
             )
             print("EMA 9 PE", pe_state["ema9"] , "EMA 21 PE ", pe_state["ema21"])
 
-            pe_state["rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
-                [c["close"] for c in peema_candles],
-                period=14
-            )
+            update_rsi(pe_state, pe_candle)
+
+            pe_state["candles"].append(pe_candle)
+            
             print("PE RSI :", pe_state["rsi14"])
 
             detect_ema_bullish_crossover(pe_state)
@@ -1382,7 +1389,7 @@ pe_state["candles"] = load_history(
 #    print(candle)
 
 
-ema_candles = ce_state["candles"][:-1]
+ema_candles = ce_state["candles"]
 
 ce_state["ema9"] = calculate_ema(
     [c["close"] for c in ema_candles],
@@ -1405,9 +1412,14 @@ ce_state["rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
     period=14
 )
 
+print(
+    f"CE RSI14: {ce_state['rsi14']:.2f} "
+    f"| Candle: {ce_state['candles'][-1]['datetime']}"
+)
+
 print("CE RSI14 :", ce_state["rsi14"])
 
-peema_candles = pe_state["candles"][:-1]
+peema_candles = pe_state["candles"]
 
 
 pe_state["ema9"] = calculate_ema(
@@ -1425,10 +1437,14 @@ pe_state["ema21"] = calculate_ema(
 print("PE EMA21 :", pe_state["ema21"])
 
 pe_state["rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
-    [c["close"] for c in peema_candles],
+    [c["close"] for c in pe_state["candles"]],
     period=14
 )
 
+print(
+    f"PE RSI14: {pe_state['rsi14']:.2f} "
+    f"| Candle: {pe_state['candles'][-1]['datetime']}"
+)
 print("PE RSI14 :", pe_state["rsi14"])
 
 
@@ -1456,6 +1472,4 @@ while True:
     except Exception as e:
         print("WS ERROR:", e)
         feed.run_forever()
-
-
-        
+ 
