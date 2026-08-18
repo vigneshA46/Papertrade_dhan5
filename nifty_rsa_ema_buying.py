@@ -594,6 +594,40 @@ def calculate_rsi(closes, period=14):
     print("RSI from local function ", rsi)
     return rsi, avg_gain, avg_loss
 
+
+def calculate_live_rsi(state, current_ltp, period=14):
+
+    if state["avg_gain"] is None or state["avg_loss"] is None:
+        return None
+
+    previous_close = state["candles"][-1]["close"]
+
+    change = current_ltp - previous_close
+
+    gain = max(change, 0)
+    loss = max(-change, 0)
+
+    live_avg_gain = (
+        (state["avg_gain"] * (period - 1)) + gain
+    ) / period
+
+    live_avg_loss = (
+        (state["avg_loss"] * (period - 1)) + loss
+    ) / period
+
+    if live_avg_loss == 0:
+        live_rsi = 100.0
+    else:
+        rs = live_avg_gain / live_avg_loss
+        live_rsi = 100.0 - (
+            100.0 / (1.0 + rs)
+        )
+
+    state["live_rsi14"] = live_rsi
+
+    return live_rsi
+
+
 def update_rsi(state, candle, period=14):
 
     if state["avg_gain"] is None or state["avg_loss"] is None:
@@ -910,6 +944,7 @@ def init_state():
         "last_ltp": None,
 
         "rsi14": None,
+        "live_rsi14": None,
         "avg_gain": None,
         "avg_loss": None,
 
@@ -1201,7 +1236,10 @@ def on_message(msg):
 
     if token == CE_ID:
 
-
+        live_rsi = calculate_live_rsi(
+           ce_state,
+            ltp
+        )   
         telemetry["ce_ltp"] = ltp
         manage_positions(ce_state, ltp)
 
@@ -1211,6 +1249,9 @@ def on_message(msg):
             print("\n========== CE 5 MIN CANDLE ==========")
             print(candle)
             print("=====================================\n")
+
+            print("RSI", ce_state["live_rsi14"])
+            ce_state["rsi14"] = ce_state["live_rsi14"]
 
             ce_state["previous_ema9"] = ce_state["ema9"]
             ce_state["previous_ema21"] = ce_state["ema21"]
@@ -1256,6 +1297,10 @@ def on_message(msg):
 
     elif token == PE_ID:
 
+        live_rsi = calculate_live_rsi(
+           pe_state,
+            ltp
+        )   
         telemetry["pe_ltp"] = ltp
         manage_positions(pe_state, ltp)
 
@@ -1265,6 +1310,9 @@ def on_message(msg):
             print("\n========== PE 5 MIN CANDLE ==========")
             print(candle)
             print("=====================================\n")
+
+            print("RSI", pe_state["live_rsi14"])
+            pe_state["rsi14"] = pe_state["live_rsi14"]
 
             pe_state["previous_ema9"] = pe_state["ema9"]
             pe_state["previous_ema21"] = pe_state["ema21"]
@@ -1381,20 +1429,11 @@ ce_state["candles"] = load_history(
     candle_count=200
 )
 
-#print("\nCE Historical Candles\n")
-
-#for candle in ce_state["candles"]:
-#    print(candle)
 
 pe_state["candles"] = load_history(
     pe_security_id,
     candle_count=200
 )
-
-#print("\nPE Historical Candles\n")
-
-#for candle in pe_state["candles"]:
-#    print(candle)
 
 
 ema_candles = ce_state["candles"]
@@ -1415,17 +1454,37 @@ ce_state["ema21"] = calculate_ema(
 
 print("CE EMA21 :", ce_state["ema21"])
 
-ce_state["rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
+
+current_minute = datetime.now(IST).replace(
+    second=0,
+    microsecond=0
+)
+
+last_candle_time = ema_candles[-1]["datetime"].replace(
+    second=0,
+    microsecond=0
+)
+
+print("current minute:", current_minute)
+print("last candle time:", last_candle_time)
+
+if current_minute == last_candle_time:
+    print("MATCH - removing last candle")
+    ema_candles = ema_candles[:-1]
+else:
+    print("NO MATCH - keeping last candle")
+
+ce_state["live_rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
     [c["close"] for c in ema_candles],
     period=14
 )
 
 print(
-    f"CE RSI14: {ce_state['rsi14']:.2f} "
-    f"| Candle: {ce_state['candles'][-1]['datetime']}"
+    f"CE RSI14: {ce_state['live_rsi14']:.2f} "
+    
 )
 
-print("CE RSI14 :", ce_state["rsi14"])
+print("CE RSI14 :", ce_state["live_rsi14"])
 
 peema_candles = pe_state["candles"]
 
@@ -1444,16 +1503,38 @@ pe_state["ema21"] = calculate_ema(
 
 print("PE EMA21 :", pe_state["ema21"])
 
-pe_state["rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
-    [c["close"] for c in pe_state["candles"]],
+
+current_minute = datetime.now(IST).replace(
+    second=0,
+    microsecond=0
+)
+
+last_candle_time = peema_candles[-1]["datetime"].replace(
+    second=0,
+    microsecond=0
+)
+
+print("current minute:", current_minute)
+print("last candle time:", last_candle_time)
+
+if current_minute == last_candle_time:
+    print("MATCH - removing last candle")
+    peema_candles = peema_candles[:-1]
+else:
+    print("NO MATCH - keeping last candle")
+
+
+
+pe_state["live_rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
+    [c["close"] for c in peema_candles],
     period=14
 )
 
 print(
-    f"PE RSI14: {pe_state['rsi14']:.2f} "
-    f"| Candle: {pe_state['candles'][-1]['datetime']}"
+    f"PE RSI14: {pe_state['live_rsi14']:.2f} "
+    
 )
-print("PE RSI14 :", pe_state["rsi14"])
+print("PE RSI14 :", pe_state["live_rsi14"])
 
 
 instruments = [
