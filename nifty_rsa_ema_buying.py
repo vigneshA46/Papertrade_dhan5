@@ -898,10 +898,10 @@ def detect_ema_bullish_crossover(state):
         and
         state["ema9"] > state["ema21"]
     )
+    if crossover:
+        print("EMA Crossover Detected:", leg)
 
-    print("EMA Crossover Detected:", leg)
-
-    state["crossover_happened"] = True
+    state["crossover_happened"] = crossover
 
     return crossover
 
@@ -968,7 +968,7 @@ def handle_leg(state, candle):
         return
 
     # Check RSI confirmation
-    if state["rsi14"] <= 30:
+    if state["rsi14"] <= 50:
         return
 
     # Save signal candle
@@ -1002,7 +1002,7 @@ def manage_positions(state, ltp):
     if (
         not state["position"]
         and state["crossover_happened"]
-        and state["rsi14"] > 30
+        and state["rsi14"] >50
         and state["waiting_for_breakout"]
         and ltp >= state["signal_candle"]["high"] + 2
     ):
@@ -1057,7 +1057,7 @@ def manage_positions(state, ltp):
             side="BUY",
             lot=state["lot"],
             price=entry_price,
-            reason="EMA CROSSOVER + RSI > 30 + BREAKOUT",
+            reason="EMA CROSSOVER + RSI > 50 + BREAKOUT",
             pnl=state["pnl"],
             cum_pnl=combined_pnl
         )
