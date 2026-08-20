@@ -152,7 +152,6 @@ def get_today_deployments():
         print("API Error:", e)
         return None
 
-
 def get_next_expiry():
     """
     Returns current/next NIFTY expiry date
@@ -904,6 +903,7 @@ def detect_ema_bullish_crossover(state):
 
     return crossover
 
+
 def init_state():
     return {
         "marked": None,
@@ -966,7 +966,7 @@ def handle_leg(state, candle):
         return
 
     # Check RSI confirmation
-    if state["rsi14"] <= 50:
+    if state["rsi14"] <= 30:
         return
 
     # Save signal candle
@@ -981,6 +981,7 @@ def handle_leg(state, candle):
     state["waiting_for_breakout"] = True
 
     print("✅ Signal Candle Created")
+
 
 def manage_positions(state, ltp):
     
@@ -998,7 +999,7 @@ def manage_positions(state, ltp):
     if (
         not state["position"]
         and state["crossover_happened"]
-        and state["rsi14"] > 50
+        and state["rsi14"] > 30
         and state["waiting_for_breakout"]
         and ltp >= state["signal_candle"]["high"] + 2
     ):
@@ -1048,7 +1049,7 @@ def manage_positions(state, ltp):
             side="BUY",
             lot=state["lot"],
             price=entry_price,
-            reason="EMA CROSSOVER + RSI > 50 + BREAKOUT",
+            reason="EMA CROSSOVER + RSI > 30 + BREAKOUT",
             pnl=state["pnl"],
             cum_pnl=combined_pnl
         )
@@ -1194,7 +1195,8 @@ def manage_positions(state, ltp):
 
         return
 
-        
+
+
 def on_message(msg):
 
     global telemetry, ce_state, pe_state
@@ -1522,7 +1524,6 @@ if current_minute == last_candle_time:
     peema_candles = peema_candles[:-1]
 else:
     print("NO MATCH - keeping last candle")
-
 
 
 pe_state["live_rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
