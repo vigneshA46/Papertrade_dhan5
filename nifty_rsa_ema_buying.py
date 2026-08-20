@@ -885,6 +885,8 @@ def detect_ema_bullish_crossover(state):
     EMA9 crosses from below EMA21 to above EMA21.
     """
 
+    leg = "CE" if state == ce_state else "PE"
+
     if (
         state["previous_ema9"] is None or
         state["previous_ema21"] is None
@@ -1252,7 +1254,7 @@ def on_message(msg):
             print(candle)
             print("=====================================\n")
 
-            print("RSI", ce_state["live_rsi14"])
+            print("RSI CE ", ce_state["live_rsi14"])
             ce_state["rsi14"] = ce_state["live_rsi14"]
 
             ce_state["previous_ema9"] = ce_state["ema9"]
@@ -1281,7 +1283,7 @@ def on_message(msg):
             print("EMA 9 CE", ce_state["ema9"] , "EMA 21 CE ", ce_state["ema21"])
 
             # Update RSI using previous candle -> current candle
-            update_rsi(ce_state, candle)
+            # update_rsi(ce_state, candle)
 
             # Now append the completed candle
             ce_state["candles"].append(candle)
@@ -1313,7 +1315,7 @@ def on_message(msg):
             print(candle)
             print("=====================================\n")
 
-            print("RSI", pe_state["live_rsi14"])
+            print("RSI PE ", pe_state["live_rsi14"])
             pe_state["rsi14"] = pe_state["live_rsi14"]
 
             pe_state["previous_ema9"] = pe_state["ema9"]
@@ -1337,7 +1339,7 @@ def on_message(msg):
             )
             print("EMA 9 PE", pe_state["ema9"] , "EMA 21 PE ", pe_state["ema21"])
 
-            update_rsi(pe_state, candle)
+            #update_rsi(pe_state, candle)
 
             pe_state["candles"].append(candle)
             
