@@ -898,8 +898,8 @@ def detect_ema_bullish_crossover(state):
         and
         state["ema9"] > state["ema21"]
     )
-    if crossover:
-        print("EMA Crossover Detected:", leg)
+    
+    print("EMA Crossover Detected:", leg)
 
     state["crossover_happened"] = crossover
 
