@@ -899,9 +899,9 @@ def detect_ema_bullish_crossover(state):
         state["ema9"] > state["ema21"]
     )
 
-    print("EMA Crossover Detected:")
+    print("EMA Crossover Detected:", leg)
 
-    state["crossover_happened"] = crossover
+    state["crossover_happened"] = True
 
     return crossover
 
@@ -976,13 +976,14 @@ def handle_leg(state, candle):
         "high": candle["high"],
         "low": candle["low"],
         "close": candle["close"],
-        "time": candle["time"]
+        "time": candle["timestamp"]
     }
 
     # Wait for breakout
     state["waiting_for_breakout"] = True
 
     print("✅ Signal Candle Created")
+    print("Signal candle high:", state["signal_candle"]["high"])
 
 
 def manage_positions(state, ltp):
@@ -1018,6 +1019,11 @@ def manage_positions(state, ltp):
         state["signal_candle"] = None
 
         print(f"{state['leg_name']} BUY @ {entry_price}")
+        
+        deployments = get_today_deployments()
+        users = group_users_by_broker(deployments)
+
+
 
         # ==========================
         # ENTRY TELEMETRY / SIGNAL
@@ -1084,6 +1090,9 @@ def manage_positions(state, ltp):
             f"{state['leg_name']} TARGET HIT @ {exit_price} "
             f"PNL: {pnl}"
         )
+
+        deployments = get_today_deployments()
+        users = group_users_by_broker(deployments)
 
         # ==========================
         # EXIT TELEMETRY / SIGNAL
@@ -1154,6 +1163,8 @@ def manage_positions(state, ltp):
             f"PNL: {pnl}"
         )
 
+        deployments = get_today_deployments()
+        users = group_users_by_broker(deployments)
         # ==========================
         # EXIT TELEMETRY / SIGNAL
         # ==========================
