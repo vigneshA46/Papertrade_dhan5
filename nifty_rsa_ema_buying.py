@@ -1251,10 +1251,10 @@ def on_message(msg):
 
     if token == CE_ID:
 
-        live_rsi = calculate_live_rsi(
+        """ live_rsi = calculate_live_rsi(
            ce_state,
             ltp
-        )   
+        )  """  
         telemetry["ce_ltp"] = ltp
         manage_positions(ce_state, ltp)
 
@@ -1265,8 +1265,8 @@ def on_message(msg):
             print(candle)
             print("=====================================\n")
 
-            print("RSI CE ", ce_state["live_rsi14"])
-            ce_state["rsi14"] = ce_state["live_rsi14"]
+            #print("RSI CE ", ce_state["live_rsi14"])
+            #ce_state["rsi14"] = ce_state["live_rsi14"]
 
             ce_state["previous_ema9"] = ce_state["ema9"]
             ce_state["previous_ema21"] = ce_state["ema21"]
@@ -1279,28 +1279,51 @@ def on_message(msg):
 
             print("CE candles loaded")
 
-            ema_candles = ce_state["candles"][:-2]
+            ema_candles = ce_state["candles"]
+
+            current_minute = datetime.now(IST).replace(
+                second=0,
+                microsecond=0
+            )
+
+            last_candle_time = ema_candles[-1]["datetime"].replace(
+                second=0,
+                microsecond=0
+            )
+
+            print("current minute:", current_minute)
+            print("last candle time:", last_candle_time)
+
+            if current_minute == last_candle_time:
+                print("MATCH - removing last candle")
+                ema_candles = ema_candles[:-1]
+            else:
+                print("NO MATCH - keeping last candle")
 
             ce_state["ema9"] = calculate_ema(
                 [c["close"] for c in ema_candles],
                 period=9
             )
 
+            print("CE EMA9 :", ce_state["ema9"])
+
             ce_state["ema21"] = calculate_ema(
-               [c["close"] for c in ema_candles],
+                [c["close"] for c in ema_candles],
                 period=21
-                )
+            )
 
-            print("EMA 9 CE", ce_state["ema9"] , "EMA 21 CE ", ce_state["ema21"])
-
-            # Update RSI using previous candle -> current candle
-            # update_rsi(ce_state, candle)
-
-            # Now append the completed candle
-            ce_state["candles"].append(candle)
+            print("CE EMA21 :", ce_state["ema21"])
 
 
-            print("CE RSI :", ce_state["rsi14"])
+            ce_state["rsi14"], ce_state["avg_gain"], ce_state["avg_loss"] = calculate_rsi(
+                [c["close"] for c in ema_candles],
+                period=14
+            )
+
+            print(
+                f"CE RSI14: {ce_state['rsi14']:.2f} "
+    
+            )
 
             detect_ema_bullish_crossover(ce_state)
 
@@ -1312,10 +1335,10 @@ def on_message(msg):
 
     elif token == PE_ID:
 
-        live_rsi = calculate_live_rsi(
+        """live_rsi = calculate_live_rsi(
            pe_state,
             ltp
-        )   
+        )"""   
         telemetry["pe_ltp"] = ltp
         manage_positions(pe_state, ltp)
 
@@ -1326,8 +1349,8 @@ def on_message(msg):
             print(candle)
             print("=====================================\n")
 
-            print("RSI PE ", pe_state["live_rsi14"])
-            pe_state["rsi14"] = pe_state["live_rsi14"]
+            #print("RSI PE ", pe_state["live_rsi14"])
+            #pe_state["rsi14"] = pe_state["live_rsi14"]
 
             pe_state["previous_ema9"] = pe_state["ema9"]
             pe_state["previous_ema21"] = pe_state["ema21"]
@@ -1337,24 +1360,49 @@ def on_message(msg):
                 candle_count=200
             )
 
-            peema_candles = pe_state["candles"][:-2]
+            
+            peema_candles = pe_state["candles"]
+
+            current_minute = datetime.now(IST).replace(
+                second=0,
+                microsecond=0
+            )
+
+            last_candle_time = peema_candles[-1]["datetime"].replace(
+                second=0,
+                microsecond=0
+            )
+
+            print("current minute:", current_minute)
+            print("last candle time:", last_candle_time)
+
+            if current_minute == last_candle_time:
+                print("MATCH - removing last candle")
+                peema_candles = peema_candles[:-1]
+            else:
+                print("NO MATCH - keeping last candle")
+
 
             pe_state["ema9"] = calculate_ema(
                 [c["close"] for c in peema_candles],
                 period=9
             )
 
+            print("PE EMA9 :", pe_state["ema9"])
+
             pe_state["ema21"] = calculate_ema(
                 [c["close"] for c in peema_candles],
                 period=21
             )
-            print("EMA 9 PE", pe_state["ema9"] , "EMA 21 PE ", pe_state["ema21"])
 
-            #update_rsi(pe_state, candle)
+            print("PE EMA21 :", pe_state["ema21"])
 
-            pe_state["candles"].append(candle)
-            
-            print("PE RSI :", pe_state["rsi14"])
+            pe_state["rsi14"], pe_state["avg_gain"], pe_state["avg_loss"] = calculate_rsi(
+                [c["close"] for c in peema_candles],
+                period=14
+            )
+
+            print("PE RSI",pe_state["rsi14"])
 
             detect_ema_bullish_crossover(pe_state)
 
