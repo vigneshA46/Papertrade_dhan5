@@ -1250,11 +1250,7 @@ def on_message(msg):
     # ==========================================================
 
     if token == CE_ID:
-
-        """ live_rsi = calculate_live_rsi(
-           ce_state,
-            ltp
-        )  """  
+ 
         telemetry["ce_ltp"] = ltp
         manage_positions(ce_state, ltp)
 
@@ -1272,10 +1268,7 @@ def on_message(msg):
             ce_state["previous_ema21"] = ce_state["ema21"]
 
 
-            ce_state["candles"] = load_history(
-                ce_security_id,
-                candle_count=200
-            )
+            ce_state["candles"].append(candle)
 
             print("CE candles loaded")
 
@@ -1335,10 +1328,7 @@ def on_message(msg):
 
     elif token == PE_ID:
 
-        """live_rsi = calculate_live_rsi(
-           pe_state,
-            ltp
-        )"""   
+ 
         telemetry["pe_ltp"] = ltp
         manage_positions(pe_state, ltp)
 
@@ -1355,12 +1345,8 @@ def on_message(msg):
             pe_state["previous_ema9"] = pe_state["ema9"]
             pe_state["previous_ema21"] = pe_state["ema21"]
 
-            pe_state["candles"] = load_history(
-                pe_security_id,
-                candle_count=200
-            )
+            pe_state["candles"].append(candle)
 
-            
             peema_candles = pe_state["candles"]
 
             current_minute = datetime.now(IST).replace(
