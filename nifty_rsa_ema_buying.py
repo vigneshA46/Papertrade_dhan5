@@ -1279,7 +1279,7 @@ def on_message(msg):
                 microsecond=0
             )
 
-            last_candle_time = ema_candles[-1]["datetime"].replace(
+            last_candle_time = ema_candles[-1]["timestamp"].replace(
                 second=0,
                 microsecond=0
             )
@@ -1354,7 +1354,7 @@ def on_message(msg):
                 microsecond=0
             )
 
-            last_candle_time = peema_candles[-1]["datetime"].replace(
+            last_candle_time = peema_candles[-1]["timestamp"].replace(
                 second=0,
                 microsecond=0
             )
