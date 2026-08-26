@@ -1274,7 +1274,7 @@ def on_message(msg):
 
             ema_candles = ce_state["candles"]
 
-            current_minute = datetime.now(IST).replace(
+            """ current_minute = datetime.now(IST).replace(
                 second=0,
                 microsecond=0
             )
@@ -1292,7 +1292,7 @@ def on_message(msg):
                 ema_candles = ema_candles[:-1]
             else:
                 print("NO MATCH - keeping last candle")
-
+ """
             ce_state["ema9"] = calculate_ema(
                 [c["close"] for c in ema_candles],
                 period=9
@@ -1349,7 +1349,7 @@ def on_message(msg):
 
             peema_candles = pe_state["candles"]
 
-            current_minute = datetime.now(IST).replace(
+            """ current_minute = datetime.now(IST).replace(
                 second=0,
                 microsecond=0
             )
@@ -1368,7 +1368,7 @@ def on_message(msg):
             else:
                 print("NO MATCH - keeping last candle")
 
-
+            """
             pe_state["ema9"] = calculate_ema(
                 [c["close"] for c in peema_candles],
                 period=9
