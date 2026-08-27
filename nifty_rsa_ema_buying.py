@@ -114,8 +114,8 @@ dhan_context = DhanContext(CLIENT_ID, access_token)
 dhan = dhanhq(dhan_context)
 
 fno_df=load_fno_master()
-
 loop = asyncio.new_event_loop()
+
 
 def start_loop():
     asyncio.set_event_loop(loop)
@@ -131,6 +131,7 @@ def run_async(coro):
             print("❌ Not coroutine:", coro)
     except Exception as e:
         print("WS error: ", e)
+
 
 def get_today_deployments():
     url = f"https://algoapi.dreamintraders.in/api/deployments/today/{strategy_id}"
@@ -151,6 +152,7 @@ def get_today_deployments():
     except requests.exceptions.RequestException as e:
         print("API Error:", e)
         return None
+
 
 def get_next_expiry():
     """
@@ -286,6 +288,7 @@ def telemetry_broadcaster():
 
         time.sleep(1)
 
+
 t = threading.Thread(target=telemetry_broadcaster, daemon=True)
 t.start()
 
@@ -316,8 +319,6 @@ def logtradeleg(strategyid, leg, symbol, strike_price, date, token):
     except Exception as e:
         print(f"⚠️ Error while calling API: {e}")
         return None
-
-
 
 
 def log_trade_event(
@@ -356,7 +357,6 @@ def log_trade_event(
 
     # 🔥 NON-BLOCKING
     trade_log_queue.put(payload)
-
 
 
 def wait_for_start():
@@ -511,7 +511,8 @@ def update_ema(state, candle):
         state["candles"].pop(0)
 
     return new_ema
-    
+
+
 def calculate_ema(closes, period=9):
 
     if len(closes) < period:
@@ -681,6 +682,7 @@ def is_market_holiday(check_date):
 
     return check_date in NSE_HOLIDAYS
 
+
 def get_previous_trading_day(current_date):
     """
     Returns the previous market trading day.
@@ -695,6 +697,7 @@ def get_previous_trading_day(current_date):
         current_date -= timedelta(days=1)
 
     return current_date
+
 
 def count_market_minutes_back(end_time, minutes):
     """
@@ -730,6 +733,7 @@ def count_market_minutes_back(end_time, minutes):
         )
 
     return current
+
 
 def get_last_market_time():
     """
@@ -784,6 +788,7 @@ def get_last_market_time():
     # After market closes
     return market_close
 
+
 def get_market_history_window(candle_count=200, interval=1):
     """
     Returns the history window required
@@ -803,6 +808,7 @@ def get_market_history_window(candle_count=200, interval=1):
     print("end time" , end_time)
 
     return start_time, end_time
+
 
 def get_previous_day_ohlc(security_id):
     """
@@ -879,11 +885,6 @@ def get_previous_day_ohlc(security_id):
     return ohlc
 
 def detect_ema_bullish_crossover(state):
-    """
-    Detects bullish EMA crossover.
-
-    EMA9 crosses from below EMA21 to above EMA21.
-    """
 
     leg = "CE" if state == ce_state else "PE"
 
@@ -893,17 +894,56 @@ def detect_ema_bullish_crossover(state):
     ):
         return False
 
-    crossover = (
-        state["previous_ema9"] <= state["previous_ema21"]
-        and
-        state["ema9"] > state["ema21"]
-    )
-    
-    print("EMA Crossover Detected:", leg)
+    if not state["crossover_happened"]:
 
-    state["crossover_happened"] = crossover
+        bullish_cross = (
+            state["previous_ema9"] <= state["previous_ema21"]
+            and
+            state["ema9"] > state["ema21"]
+        )
 
-    return crossover
+        if bullish_cross:
+
+            state["crossover_happened"] = True
+
+            print("🟢 BULLISH EMA CROSSOVER DETECTED" , leg)
+
+            return True
+
+    return False
+
+
+def detect_ema_bearish_crossover(state):
+
+    leg = "CE" if state == ce_state else "PE"
+
+    if (
+        state["previous_ema9"] is None or
+        state["previous_ema21"] is None
+    ):
+        return False
+
+    # --------------------------------------------------
+    # Only check bearish crossover when a bullish
+    # crossover is currently active.
+    # --------------------------------------------------
+    if state["crossover_happened"]:
+
+        bearish_cross = (
+            state["previous_ema9"] >= state["previous_ema21"]
+            and
+            state["ema9"] < state["ema21"]
+        )
+
+        if bearish_cross:
+
+            state["crossover_happened"] = False
+
+            print("🔴 BEARISH EMA CROSSOVER DETECTED" , leg)
+
+            return True
+
+    return False
 
 
 def init_state():
@@ -1209,7 +1249,6 @@ def manage_positions(state, ltp):
         return
 
 
-
 def on_message(msg):
 
     global telemetry, ce_state, pe_state
@@ -1274,7 +1313,8 @@ def on_message(msg):
 
             ema_candles = ce_state["candles"]
 
-            """ current_minute = datetime.now(IST).replace(
+            """
+            current_minute = datetime.now(IST).replace(
                 second=0,
                 microsecond=0
             )
@@ -1292,7 +1332,7 @@ def on_message(msg):
                 ema_candles = ema_candles[:-1]
             else:
                 print("NO MATCH - keeping last candle")
- """
+            """
             ce_state["ema9"] = calculate_ema(
                 [c["close"] for c in ema_candles],
                 period=9
@@ -1315,10 +1355,13 @@ def on_message(msg):
 
             print(
                 f"CE RSI14: {ce_state['rsi14']:.2f} "
-    
             )
 
-            detect_ema_bullish_crossover(ce_state)
+            if not ce_state["crossover_happened"]:
+                detect_ema_bullish_crossover(ce_state)
+            else:
+                detect_ema_bearish_crossover(ce_state)
+
 
             handle_leg(ce_state, candle)
 
@@ -1349,7 +1392,8 @@ def on_message(msg):
 
             peema_candles = pe_state["candles"]
 
-            """ current_minute = datetime.now(IST).replace(
+            """ 
+            current_minute = datetime.now(IST).replace(
                 second=0,
                 microsecond=0
             )
@@ -1390,8 +1434,11 @@ def on_message(msg):
 
             print("PE RSI",pe_state["rsi14"])
 
-            detect_ema_bullish_crossover(pe_state)
-
+            if not pe_state["crossover_happened"]:
+                detect_ema_bullish_crossover(pe_state)
+            else:
+                detect_ema_bearish_crossover(pe_state)
+    
             handle_leg(pe_state, candle)
 
 
