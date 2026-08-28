@@ -1297,7 +1297,7 @@ def on_message(msg):
         if candle:
 
             print("\n========== CE 5 MIN CANDLE ==========")
-            print(candle)
+            print("CE CANDLE :" , candle)
             print("=====================================\n")
 
             #print("RSI CE ", ce_state["live_rsi14"])
@@ -1379,7 +1379,7 @@ def on_message(msg):
         if candle:
 
             print("\n========== PE 5 MIN CANDLE ==========")
-            print(candle)
+            print("PE CANDLE :" , candle)
             print("=====================================\n")
 
             #print("RSI PE ", pe_state["live_rsi14"])
