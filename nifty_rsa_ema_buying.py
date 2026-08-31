@@ -938,6 +938,8 @@ def detect_ema_bearish_crossover(state):
         if bearish_cross:
 
             state["crossover_happened"] = False
+            state["signal_candle"] = None
+            state["waiting_for_breakout"] = False
 
             print("🔴 BEARISH EMA CROSSOVER DETECTED" , leg)
 
@@ -954,6 +956,9 @@ def init_state():
 
         "entry_price": None,
         "entry_time": None,
+
+        "stoploss": None,
+        "highest_price": None,
 
         "lot": 1,
         "pnl": 0.0,
@@ -1011,19 +1016,21 @@ def handle_leg(state, candle):
     if state["rsi14"] <= 50:
         return
 
-    # Save signal candle
-    state["signal_candle"] = {
-        "high": candle["high"],
-        "low": candle["low"],
-        "close": candle["close"],
-        "time": candle["timestamp"]
-    }
+    if state["signal_candle"] is None:
 
-    # Wait for breakout
-    state["waiting_for_breakout"] = True
+        # Save signal candle
+        state["signal_candle"] = {
+            "high": candle["high"],
+            "low": candle["low"],
+            "close": candle["close"],
+            "time": candle["timestamp"]
+        }
 
-    print("✅ Signal Candle Created")
-    print("Signal candle high:", state["signal_candle"]["high"])
+        # Wait for breakout
+        state["waiting_for_breakout"] = True
+
+        print("✅ Signal Candle Created")
+        print("Signal candle high:", state["signal_candle"]["high"])
 
 
 def manage_positions(state, ltp):
