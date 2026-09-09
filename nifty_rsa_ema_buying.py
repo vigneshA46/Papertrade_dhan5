@@ -60,7 +60,7 @@ ATM = None
 TRADE_LOG_URL = "https://algoapi.dreamintraders.in/api/paperlogger/event"
 EVENT_LOG_URL = "https://algoapi.dreamintraders.in/api/paperlogger/paperlogger"
 
-COMMON_ID = "b3d3baff-9e47-4cbf-934b-48800ef96b8c"
+COMMON_ID = "b3d3baff-9e47-4cbf-934b-48800ef96b8d"
 SYMBOL = "NIFTY"
 
 CE_ID = None
@@ -88,7 +88,7 @@ TARGET_POINTS = 50
 LOTSIZE = 65
 OPTION_SELECTION_LTP = 200
 
-strategy_id = "b3d3baff-9e47-4cbf-934b-48800ef96b8c"
+strategy_id = "b3d3baff-9e47-4cbf-934b-48800ef96b8d"
 
 today = datetime.now(IST).strftime("%Y-%m-%d")
 

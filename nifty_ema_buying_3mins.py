@@ -8,7 +8,7 @@ from dhanhq import MarketFeed
 from dhanhq import DhanContext, dhanhq
 from datetime import timedelta
 from dhan_token import get_access_token
-from candle_builder import FiveMinuteCandleBuilder , OneMinuteCandleBuilder , ThreeMinuteCandleBuilder
+from candle_builder import FiveMinuteCandleBuilder , OneMinuteCandleBuilder
 from find_security import load_fno_master, find_option_security
 import threading
 from dispatcher import subscribe
@@ -492,7 +492,9 @@ def load_history(security_id, candle_count=200):
             "volume": float(volumes[i])
         })
 
-    #print(f"Loaded {len(candles)} historical candles")
+    print("candles loaded:", candles)
+
+    print(f"Loaded {len(candles)} historical candles")
 
     return candles[-candle_count-1:-1]
 
@@ -1048,6 +1050,7 @@ def manage_positions(state, ltp):
     3. Stop Loss Exit
     """
     global combined_pnl , trades_today , MAX_TRADES_PER_DAY
+    now = datetime.now(IST).time()
 
     name = "CE" if state == ce_state else "PE"
     token = CE_ID if state == ce_state else PE_ID
@@ -1583,8 +1586,8 @@ ce_state = init_state()
 pe_state = init_state()
 
 builders = {
-    CE_ID: ThreeMinuteCandleBuilder(),
-    PE_ID: ThreeMinuteCandleBuilder()
+    CE_ID: FiveMinuteCandleBuilder(),
+    PE_ID: FiveMinuteCandleBuilder()
 }
 
 
