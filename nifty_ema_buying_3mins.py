@@ -115,6 +115,8 @@ telemetry = {
 # =========================
 
 access_token = get_access_token()
+
+print(access_token)
 CLIENT_ID = os.getenv("CLIENT_ID")
 dhan_context = DhanContext(CLIENT_ID, access_token)
 dhan = dhanhq(dhan_context)
@@ -443,20 +445,17 @@ def select_option_contracts(oc, max_ltp=OPTION_SELECTION_LTP):
         pe_candidate["security_id"],
     )
 
-
 def load_history(security_id, candle_count=200):
 
-    print("Load history called")
+    # Fetch extra 1-minute candles to ensure
+    # we can construct 200 complete 3-minute candles.
+
+    minute_count = (candle_count * 3) + 30
 
     start_time, end_time = get_market_history_window(
-        candle_count=candle_count,
-        interval=3
+        candle_count=minute_count,
+        interval=1
     )
-
-    #print("\n========== HISTORY WINDOW ==========")
-    #print("From :", start_time)
-    #print("To   :", end_time)
-    #print("====================================\n")
 
     data = dhan.intraday_minute_data(
         security_id=str(security_id),
@@ -464,7 +463,7 @@ def load_history(security_id, candle_count=200):
         instrument_type="OPTIDX",
         from_date=start_time.strftime("%Y-%m-%d %H:%M:%S"),
         to_date=end_time.strftime("%Y-%m-%d %H:%M:%S"),
-        interval=3
+        interval=1
     )
 
     raw = data.get("data", {})
@@ -476,28 +475,67 @@ def load_history(security_id, candle_count=200):
     volumes = raw.get("volume", [])
     timestamps = raw.get("timestamp", [])
 
-    candles = []
+    minute_candles = []
 
     for i in range(len(timestamps)):
 
-        ts = datetime.fromtimestamp(timestamps[i], IST)
+        ts = datetime.fromtimestamp(
+            timestamps[i],
+            IST
+        )
 
-        candles.append({
+        minute_candles.append({
+
             "timestamp": timestamps[i],
             "datetime": ts,
+
             "open": float(opens[i]),
             "high": float(highs[i]),
             "low": float(lows[i]),
             "close": float(closes[i]),
             "volume": float(volumes[i])
+
         })
 
-    print("candles loaded:", candles)
+    # Convert 1-minute candles into exact 3-minute candles
+    three_minute_candles = build_3min_candles(
+        minute_candles,
+        required_count=candle_count
+    )
 
-    print(f"Loaded {len(candles)} historical candles")
+    candles_3m = build_3min_candles(minute_candles, required_count=candle_count)
 
-    return candles[-candle_count-1:-1]
+    print(f"\n========== 3-MINUTE HISTORICAL CANDLES ({len(candles_3m)}) ==========")
 
+    for candle in candles_3m:
+        print(
+            f"Time: {candle['datetime']} | "
+            f"O: {candle['open']:.2f} | "
+            f"H: {candle['high']:.2f} | "
+            f"L: {candle['low']:.2f} | "
+            f"C: {candle['close']:.2f} | "
+            f"V: {candle['volume']}"
+        )
+
+    print("===============================================================\n")
+
+    print(
+        f"Loaded {len(minute_candles)} one-minute candles "
+        f"-> {len(three_minute_candles)} complete 3-minute candles"
+    )
+
+    if three_minute_candles:
+        print(
+            "First 3-min candle:",
+            three_minute_candles[0]["datetime"]
+        )
+
+        print(
+            "Latest 3-min candle:",
+            three_minute_candles[-1]["datetime"]
+        )
+
+    return three_minute_candles
 
 def update_ema(state, candle):
 
@@ -797,7 +835,7 @@ def get_last_market_time():
     return market_close
 
 
-def get_market_history_window(candle_count=200, interval=3):
+def get_market_history_window(candle_count=200, interval=1):
     """
     Returns the history window required
     to fetch the last completed market candles.
@@ -844,7 +882,7 @@ def get_previous_day_ohlc(security_id):
         instrument_type="OPTIDX",
         from_date=start.strftime("%Y-%m-%d %H:%M:%S"),
         to_date=end.strftime("%Y-%m-%d %H:%M:%S"),
-        interval=3
+        interval=1
     )
 
     if data.get("status") != "success":
@@ -891,6 +929,96 @@ def get_previous_day_ohlc(security_id):
     }
 
     return ohlc
+
+def build_3min_candles(minute_candles, required_count=200):
+    """
+    Converts 1-minute historical candles into
+    exact 3-minute candles aligned to 09:15 IST.
+
+    Only complete 3-minute candles are returned.
+    """
+
+    grouped = {}
+
+    market_open_minutes = 9 * 60 + 15
+
+    # Sort oldest to newest
+    minute_candles = sorted(
+        minute_candles,
+        key=lambda c: c["datetime"]
+    )
+
+    for candle in minute_candles:
+
+        dt = candle["datetime"]
+
+        # Ignore candles outside market hours
+        current_minutes = dt.hour * 60 + dt.minute
+
+        if current_minutes < market_open_minutes:
+            continue
+
+        # Calculate 3-minute bucket start
+        elapsed = current_minutes - market_open_minutes
+
+        bucket_offset = (elapsed // 3) * 3
+
+        bucket_start = (
+            dt.replace(
+                hour=9,
+                minute=15,
+                second=0,
+                microsecond=0
+            )
+            + timedelta(minutes=bucket_offset)
+        )
+
+        # Group by trading date and bucket start
+        key = (dt.date(), bucket_start)
+
+        grouped.setdefault(key, []).append(candle)
+
+    three_minute_candles = []
+
+    for (trading_date, bucket_start), candles in sorted(grouped.items()):
+
+        candles.sort(key=lambda c: c["datetime"])
+
+        # Require exactly 3 consecutive one-minute candles
+        expected_times = [
+            bucket_start + timedelta(minutes=i)
+            for i in range(3)
+        ]
+
+        actual_times = [
+            c["datetime"].replace(second=0, microsecond=0)
+            for c in candles
+        ]
+
+        if actual_times != expected_times:
+            continue
+
+        # Construct combined 3-minute candle
+        three_minute_candles.append({
+
+            "timestamp": int(bucket_start.timestamp()),
+
+            "datetime": bucket_start,
+
+            "open": candles[0]["open"],
+
+            "high": max(c["high"] for c in candles),
+
+            "low": min(c["low"] for c in candles),
+
+            "close": candles[-1]["close"],
+
+            "volume": sum(c["volume"] for c in candles)
+
+        })
+
+    return three_minute_candles[-required_count:]
+
 
 def detect_ema_bullish_crossover(state):
 
@@ -1041,6 +1169,38 @@ def handle_leg(state, candle):
         print("Signal candle high:", state["signal_candle"]["high"])
 
 
+def check_volume_confirmation(state):
+    """
+    Entry is allowed only when the latest completed candle's
+    volume is greater than the candle before it.
+    """
+
+    candles = state.get("candles", [])
+
+    if len(candles) < 2:
+        print(f"{state['leg_name']} ❌ Not enough candles for volume check")
+        return False
+
+    previous_candle = candles[-1]
+    previous_previous_candle = candles[-2]
+
+    previous_volume = float(previous_candle.get("volume", 0))
+    previous_previous_volume = float(
+        previous_previous_candle.get("volume", 0)
+    )
+
+    passed = previous_volume > previous_previous_volume
+
+    print(
+        f"{state['leg_name']} VOLUME CHECK | "
+        f"Previous: {previous_volume} | "
+        f"Previous-Previous: {previous_previous_volume} | "
+        f"Passed: {passed}"
+    )
+
+    return passed
+
+
 def manage_positions(state, ltp):
     
     """
@@ -1106,11 +1266,26 @@ def manage_positions(state, ltp):
     if (
         not state["position"]
         and state["crossover_happened"]
-        and state["rsi14"] >50
+        and state["rsi14"] is not None
+        and state["rsi14"] > 50
         and state["waiting_for_breakout"]
         and ltp >= state["signal_candle"]["high"] + 2
-        and trades_today < MAX_TRADES_PER_DAY
-        ):
+     ):
+
+        # Volume confirmation BEFORE placing entry
+        if not check_volume_confirmation(state):
+
+            print(
+                f"{state['leg_name']} ❌ ENTRY REJECTED: "
+                f"Volume confirmation failed"
+            )
+
+            # Cancel this signal; do not enter later on the same breakout
+            state["waiting_for_breakout"] = False
+            state["crossover_happened"] = False
+            state["signal_candle"] = None
+
+            return
 
         entry_price = ltp
 
@@ -1118,26 +1293,15 @@ def manage_positions(state, ltp):
         state["position"] = True
         state["entry_price"] = entry_price
 
-        state["stoploss"] = entry_price - 20
-        state["highest_price"] = entry_price
-
-        trades_today += 1
-
-        print(
-            f"ENTRY COUNT: {trades_today}/{MAX_TRADES_PER_DAY}"
-        )
-
         # Reset signal
         state["waiting_for_breakout"] = False
         state["crossover_happened"] = False
         state["signal_candle"] = None
 
-        print(f"{state['leg_name']} BUY @ {entry_price}")
-        
-        deployments = get_today_deployments()
-        users = group_users_by_broker(deployments)
-
-
+        print(
+            f"{state['leg_name']} BUY @ {entry_price} "
+            f"| Volume confirmation passed"
+        )
 
         # ==========================
         # ENTRY TELEMETRY / SIGNAL
@@ -1171,7 +1335,7 @@ def manage_positions(state, ltp):
             side="BUY",
             lot=state["lot"],
             price=entry_price,
-            reason="EMA CROSSOVER + RSI > 50 + BREAKOUT",
+            reason="EMA CROSSOVER + RSI > 50 + BREAKOUT + VOLUME CONFIRMATION",
             pnl=state["pnl"],
             cum_pnl=combined_pnl
         )
@@ -1357,6 +1521,8 @@ def manage_positions(state, ltp):
 
 def on_message(msg):
 
+    print(msg)
+
     global telemetry, ce_state, pe_state , CE_ID, PE_ID, combined_pnl
 
     if msg.get("type") != "Quote Data":
@@ -1445,6 +1611,7 @@ def on_message(msg):
             else:
                 print("NO MATCH - keeping last candle")
             """
+
             ce_state["ema9"] = calculate_ema(
                 [c["close"] for c in ema_candles],
                 period=9
@@ -1634,13 +1801,13 @@ logtradeleg(
 
 ce_state["candles"] = load_history(
     ce_security_id,
-    candle_count=200
+    candle_count=600
 )
 
 
 pe_state["candles"] = load_history(
     pe_security_id,
-    candle_count=200
+    candle_count=600
 )
 
 

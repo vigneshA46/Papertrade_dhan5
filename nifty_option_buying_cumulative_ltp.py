@@ -933,3 +933,4 @@ def on_tick(token, msg):
 
 for t in TOKENS:
     subscribe(t, on_tick)
+    

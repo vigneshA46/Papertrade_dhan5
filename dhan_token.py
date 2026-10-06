@@ -58,6 +58,8 @@ def get_access_token():
     # 1️⃣ Check DB
     token, expiry = get_token_from_db()
 
+    token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzkxMzQyNTQ0LCJpYXQiOjE3OTEyNTYxNDQsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTE0MDU2MDg5In0.2rAY8LcbX6aZgKAeKgS_hyEgtfv384BE9Yl1w0H8wZCtwhhhSp64mKnG_XI_uV0KeLNw541M1wqcrn2qpPVHWw"
+
     if token and expiry:
         time_left = expiry - datetime.utcnow()
 
@@ -90,6 +92,8 @@ def get_access_token():
     save_token_to_db(token, expiry)
 
     print("🔐 New Dhan token generated & saved to DB")
+
+    token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyUmVnaW9uIjoiUjEiLCJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzkxMzQyNTQ0LCJpYXQiOjE3OTEyNTYxNDQsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTE0MDU2MDg5In0.2rAY8LcbX6aZgKAeKgS_hyEgtfv384BE9Yl1w0H8wZCtwhhhSp64mKnG_XI_uV0KeLNw541M1wqcrn2qpPVHWw"
 
     return token
 
