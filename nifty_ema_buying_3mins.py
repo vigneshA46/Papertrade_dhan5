@@ -1726,7 +1726,7 @@ threading.Thread(target=trade_log_worker, daemon=True).start()
 
 
 wait_for_start()
-next_expiry = get_next_expiry()
+next_expiry = "2026-10-06"
 
 print("Next expiry:", next_expiry)
 
