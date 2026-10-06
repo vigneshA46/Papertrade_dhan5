@@ -172,6 +172,7 @@ def get_next_expiry():
         under_security_id=13,
         under_exchange_segment="IDX_I"
     )
+    print("expiry data" , expiries )
 
     expiry_list = expiries["data"]
 
