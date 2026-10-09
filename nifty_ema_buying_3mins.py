@@ -8,7 +8,7 @@ from dhanhq import MarketFeed
 from dhanhq import DhanContext, dhanhq
 from datetime import timedelta
 from dhan_token import get_access_token
-from candle_builder import FiveMinuteCandleBuilder , OneMinuteCandleBuilder
+from candle_builder import FiveMinuteCandleBuilder , OneMinuteCandleBuilder , ThreeMinuteCandleBuilder
 from find_security import load_fno_master, find_option_security
 import threading
 from dispatcher import subscribe
@@ -172,7 +172,6 @@ def get_next_expiry():
         under_security_id=13,
         under_exchange_segment="IDX_I"
     )
-    print("expiry data" , expiries )
 
     expiry_list = expiries["data"]
 
@@ -1273,21 +1272,6 @@ def manage_positions(state, ltp):
         and ltp >= state["signal_candle"]["high"] + 2
      ):
 
-        # Volume confirmation BEFORE placing entry
-        if not check_volume_confirmation(state):
-
-            print(
-                f"{state['leg_name']} ❌ ENTRY REJECTED: "
-                f"Volume confirmation failed"
-            )
-
-            # Cancel this signal; do not enter later on the same breakout
-            state["waiting_for_breakout"] = False
-            state["crossover_happened"] = False
-            state["signal_candle"] = None
-
-            return
-
         entry_price = ltp
 
         # Store entry details
@@ -1298,11 +1282,6 @@ def manage_positions(state, ltp):
         state["waiting_for_breakout"] = False
         state["crossover_happened"] = False
         state["signal_candle"] = None
-
-        print(
-            f"{state['leg_name']} BUY @ {entry_price} "
-            f"| Volume confirmation passed"
-        )
 
         # ==========================
         # ENTRY TELEMETRY / SIGNAL
@@ -1724,7 +1703,7 @@ threading.Thread(target=trade_log_worker, daemon=True).start()
 
 
 wait_for_start()
-next_expiry = "2026-10-06"
+next_expiry = get_next_expiry()
 
 print("Next expiry:", next_expiry)
 
@@ -1752,8 +1731,8 @@ ce_state = init_state()
 pe_state = init_state()
 
 builders = {
-    CE_ID: FiveMinuteCandleBuilder(),
-    PE_ID: FiveMinuteCandleBuilder()
+    CE_ID: ThreeMinuteCandleBuilder(),
+    PE_ID: ThreeMinuteCandleBuilder()
 }
 
 
@@ -1950,4 +1929,3 @@ while True:
     except Exception as e:
         print("WS ERROR:", e)
         feed.run_forever()
- 
