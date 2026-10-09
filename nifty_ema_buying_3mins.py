@@ -1283,6 +1283,10 @@ def manage_positions(state, ltp):
         state["crossover_happened"] = False
         state["signal_candle"] = None
 
+        deployments = get_today_deployments()
+
+        users = group_users_by_broker(deployments)
+
         # ==========================
         # ENTRY TELEMETRY / SIGNAL
         # ==========================
