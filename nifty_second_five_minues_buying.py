@@ -42,7 +42,7 @@ SYMBOL = "NIFTY"
 load_dotenv()
 
 STRATEGY_NAME = "NIFTY_OPTION_BUYING_50_reentry"
-client_id = os.getenv("CLIENT_ID")
+client_id = os.getenv("CLIENT_ID1")
 access_token = get_access_token()
 
 
@@ -477,7 +477,7 @@ def on_tick_check(state, ltp, leg_name):
     # =========================
     # DAY TARGET
     # =========================
-    if telemetry["pnl"] >= 1500:
+    if telemetry["pnl"] >= 1000:
 
         print(f"🎯 DAY TARGET HIT | MTM: {telemetry['pnl']}")
 
