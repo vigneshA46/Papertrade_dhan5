@@ -1277,6 +1277,8 @@ def manage_positions(state, ltp):
         # Store entry details
         state["position"] = True
         state["entry_price"] = entry_price
+        state["stoploss"] = entry_price - 20
+        state["highest_price"] = entry_price
 
         # Reset signal
         state["waiting_for_breakout"] = False
@@ -1356,12 +1358,12 @@ def manage_positions(state, ltp):
 
 
     # ==========================
-    # TARGET EXIT
+    # TRAILING STOP-LOSS EXIT
     # ==========================
     if (
         state["position"]
+        and state["stoploss"] is not None
         and ltp <= state["stoploss"]
-
     ):
 
         exit_price = ltp
@@ -1437,6 +1439,7 @@ def manage_positions(state, ltp):
     # ==========================
     if (
         state["position"]
+        and state["entry_price"] is not None
         and ltp <= state["entry_price"] - 20
     ):
 
