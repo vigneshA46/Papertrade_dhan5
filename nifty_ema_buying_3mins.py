@@ -117,7 +117,7 @@ telemetry = {
 access_token = get_access_token()
 
 print(access_token)
-CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_ID = os.getenv("CLIENT_ID1")
 dhan_context = DhanContext(CLIENT_ID, access_token)
 dhan = dhanhq(dhan_context)
 
