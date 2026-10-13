@@ -26,7 +26,10 @@ import paper_trade_niftyoption50_no_reentry as strategy1
 
 option_chain_manager.update_option_chain()
 
-import nifty_rsa_ema_buying as strategy13
+import nifty_option_buying_pivot_cum_ltp as strategy14
+
+
+#import nifty_rsa_ema_buying as strategy13
 #import paper_trade_niftyoption8_no_reentry as strategy8
 #import nifty_option_buying_cul_lot2 as strategy12
 
@@ -45,7 +48,7 @@ if 'strategy1' in globals():
 
  
 access_token = get_access_token()
-client_id = os.getenv("CLIENT_ID")
+client_id = os.getenv("CLIENT_ID1")
 dhan_context = DhanContext(client_id, access_token)
 dhan = dhanhq(dhan_context)
 
