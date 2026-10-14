@@ -1,4 +1,5 @@
 import time
+import bisect
 import pytz
 import requests
 from datetime import datetime, timedelta, time as dtime
@@ -47,8 +48,15 @@ IST = pytz.timezone("Asia/Kolkata")
 TRADE_START = dtime(9, 17)
 TRADE_END   = dtime(15, 14)
 
-TARGET_LTP       = 180     # strike selection: premium nearest to this
-ROLL_LTP         = 280     # strike roll when flat and LTP above this
+TARGET_LTP       = 180     # 09:17 initial selection: premium nearest to this
+
+ROLL_UPPER       = 280     # flat + tick LTP above this  -> strike change
+ROLL_LOWER       = 170     # flat + tick LTP below this  -> strike change
+PICK_MIN         = 180     # on strike change, new strike LTP must be
+PICK_MAX         = 280     #   PICK_MIN < ltp < PICK_MAX
+MAX_ROLL_STEPS   = 20      # max strikes to walk on one strike change
+NIFTY_SECURITY_ID = 13
+CHAIN_MIN_GAP    = 3.1     # Dhan option chain API: 1 call per 3 sec
 TARGET_POINTS    = 25      # fixed target per trade
 SL_BUFFER        = 8       # tick SL = pivot - 8
 BASE_LOT         = 2
@@ -395,49 +403,164 @@ def calculate_pivots(ohlc):
 
 
 # =========================
-# STRIKE SELECTION
+# OPTION CHAIN (LIVE)
 # =========================
 
-def select_strike(side):
-    """
-    side: "CE" / "PE"
-    Strike whose LTP is nearest to TARGET_LTP and has previous-day data for pivots.
-    """
-    oc = option_chain_manager.get_option_chain()
-    option_data = oc["data"]["data"]["oc"]
-    key = side.lower()
+EXPIRY = None
+chain_lock = threading.Lock()
+_last_chain_call = [0.0]
 
-    candidates = []
-    for strike, strike_data in option_data.items():
+def get_expiry():
+    try:
+        res = dhan.expiry_list(
+            under_security_id=NIFTY_SECURITY_ID,
+            under_exchange_segment="IDX_I"
+        )
+        return res["data"]["data"][0]
+    except Exception as e:
+        print("❌ Expiry list error:", e)
+        return None
+
+def get_fresh_chain():
+    """
+    LIVE option chain straight from Dhan (rate limited to 1 call / 3 sec).
+    The shared option_chain_manager copy is only a fallback — it is fetched
+    once at startup, so its LTPs are stale for strike changes later in the day.
+    """
+    with chain_lock:
+        if EXPIRY:
+            gap = CHAIN_MIN_GAP - (time.time() - _last_chain_call[0])
+            if gap > 0:
+                time.sleep(gap)
+            try:
+                res = dhan.option_chain(
+                    under_security_id=NIFTY_SECURITY_ID,
+                    under_exchange_segment="IDX_I",
+                    expiry=str(EXPIRY)
+                )
+                _last_chain_call[0] = time.time()
+                oc = res["data"]["data"]["oc"]
+                if oc:
+                    return oc
+                print("⚠️ Live option chain empty:", res.get("remarks"))
+            except Exception as e:
+                _last_chain_call[0] = time.time()
+                print("⚠️ Live option chain error:", e)
+
+        print("⚠️ Using CACHED option chain (LTPs may be stale)")
+        return option_chain_manager.get_option_chain()["data"]["data"]["oc"]
+
+def chain_rows(oc, side):
+    """[(strike, ltp, security_id)] for one side, sorted by strike."""
+    key = side.lower()
+    rows = []
+    for strike, strike_data in oc.items():
         if key not in strike_data:
             continue
         ltp = float(strike_data[key].get("last_price") or 0)
-        if ltp <= 0:
-            continue
-        candidates.append((abs(ltp - TARGET_LTP), float(strike), ltp, str(strike_data[key]["security_id"])))
+        rows.append((float(strike), ltp, str(strike_data[key]["security_id"])))
+    rows.sort(key=lambda r: r[0])
+    return rows
 
-    candidates.sort(key=lambda x: x[0])
+def build_selection(strike, ltp, sid):
+    ohlc = get_prev_day_ohlc(sid)
+    if not ohlc:
+        return None
+    pivots, levels = calculate_pivots(ohlc)
+    return {
+        "strike": strike,
+        "ltp": ltp,
+        "security_id": sid,
+        "ohlc": ohlc,
+        "pivots": pivots,
+        "levels": levels
+    }
 
-    for _, strike, ltp, sid in candidates[:MAX_STRIKE_CANDIDATES]:
-        ohlc = get_prev_day_ohlc(sid)
-        if not ohlc:
-            continue
-        pivots, levels = calculate_pivots(ohlc)
-        return {
-            "strike": strike,
-            "ltp": ltp,
-            "security_id": sid,
-            "ohlc": ohlc,
-            "pivots": pivots,
-            "levels": levels
-        }
+
+# =========================
+# STRIKE SELECTION
+# =========================
+
+def select_initial_strike(side, oc):
+    """09:17 -> strike whose LTP is nearest to TARGET_LTP (with prev-day data for pivots)."""
+    rows = [r for r in chain_rows(oc, side) if r[1] > 0]
+    rows.sort(key=lambda r: abs(r[1] - TARGET_LTP))
+
+    for strike, ltp, sid in rows[:MAX_STRIKE_CANDIDATES]:
+        sel = build_selection(strike, ltp, sid)
+        if sel:
+            return sel
 
     print(f"❌ No valid {side} strike found near {TARGET_LTP}")
+    return None
+
+def roll_trigger(ltp):
+    if ltp > ROLL_UPPER:
+        return "HIGH"
+    if ltp < ROLL_LOWER:
+        return "LOW"
+    return None
+
+def roll_direction(side, trigger):
+    """
+    +1 -> walk to higher strikes, -1 -> walk to lower strikes
+    CE  LOW (<170)  -> lower strikes  (22300 -> 22250 -> 22200 ...)
+    CE  HIGH (>280) -> higher strikes (22300 -> 22350 -> 22400 ...)
+    PE  LOW (<170)  -> higher strikes
+    PE  HIGH (>280) -> lower strikes
+    """
+    if side == "CE":
+        return -1 if trigger == "LOW" else +1
+    return +1 if trigger == "LOW" else -1
+
+def select_roll_strike(side, current_strike, trigger):
+    """Walk strike by strike from the current one; first with PICK_MIN < LTP < PICK_MAX wins."""
+    rows = chain_rows(get_fresh_chain(), side)
+    strikes = [r[0] for r in rows]
+    direction = roll_direction(side, trigger)
+    cur = float(current_strike)
+
+    if direction > 0:
+        idx = bisect.bisect_right(strikes, cur)
+    else:
+        idx = bisect.bisect_left(strikes, cur) - 1
+
+    steps = 0
+    while 0 <= idx < len(rows) and steps < MAX_ROLL_STEPS:
+        strike, ltp, sid = rows[idx]
+        steps += 1
+        print(f"   🔎 {side} check {int(strike)} -> LTP {ltp}")
+
+        if ltp > 0:
+            if PICK_MIN < ltp < PICK_MAX:
+                sel = build_selection(strike, ltp, sid)
+                if sel:
+                    return sel
+                print(f"   ⚠️ {side} {int(strike)} has no prev-day data, checking next")
+            # premium only moves further away from the range from here on
+            elif trigger == "LOW" and ltp >= PICK_MAX:
+                break
+            elif trigger == "HIGH" and ltp <= PICK_MIN:
+                break
+
+        idx += direction
+
     return None
 
 def resolve_rows(side, strike):
     dhan_row = find_option_security(fno_df, strike, side, today, "NIFTY")
     angel_row = finder.get_option("NIFTY", int(strike), side)
+
+    # Angel token must be for the SAME expiry we trade on Dhan
+    try:
+        d_exp = dhan_row["SM_EXPIRY_DATE"].strftime("%Y-%m-%d")
+        a_exp = str(angel_row["expiry"])[:10]
+        if d_exp != a_exp:
+            print(f"🚨 ANGEL EXPIRY MISMATCH {side} {int(strike)} -> Dhan {d_exp} | Angel {a_exp} "
+                  f"(token {angel_row['token']}) — Angel users would get the WRONG contract")
+    except Exception as e:
+        print("Expiry check error:", e)
+
     return dhan_row, angel_row
 
 
@@ -657,23 +780,32 @@ def check_mtm():
 # STRIKE ROLL
 # =========================
 
-def start_roll(leg):
+def start_roll(leg, trigger):
     if leg["rolling"]:
         return
     if time.time() - leg["last_roll_attempt"] < ROLL_RETRY_SECONDS:
         return
     leg["rolling"] = True
     leg["last_roll_attempt"] = time.time()
-    print(f"🔁 {leg['name']} LTP {leg['ltp']} > {ROLL_LTP} -> rolling strike")
-    threading.Thread(target=roll_worker, args=(leg["name"],), daemon=True).start()
 
-def roll_worker(name):
+    cond = f"> {ROLL_UPPER}" if trigger == "HIGH" else f"< {ROLL_LOWER}"
+    way = "higher" if roll_direction(leg["name"], trigger) > 0 else "lower"
+    print(f"🔁 {leg['name']} {int(leg['strike'])} LTP {leg['ltp']} {cond} -> strike change, walking {way} strikes")
+
+    threading.Thread(
+        target=roll_worker,
+        args=(leg["name"], trigger, leg["strike"]),
+        daemon=True
+    ).start()
+
+def roll_worker(name, trigger, from_strike):
     leg = legs[name]
     try:
-        sel = select_strike(name)
+        sel = select_roll_strike(name, from_strike, trigger)
 
-        if not sel or sel["security_id"] == leg["token"]:
-            print(f"⚠️ {name} roll skipped (no new strike)")
+        if not sel:
+            print(f"⚠️ {name} no strike with {PICK_MIN} < LTP < {PICK_MAX} — staying on "
+                  f"{int(from_strike)}, retry in {ROLL_RETRY_SECONDS}s")
             with state_lock:
                 leg["rolling"] = False
             return
@@ -686,11 +818,16 @@ def roll_worker(name):
                 return
 
             old_token = leg["token"]
+            old_strike = leg["strike"]
             token_map.pop(old_token, None)
 
-            apply_contract(leg, sel, dhan_row, angel_row)   # lot + leg pnl carried over
+            # lot + leg pnl carried over (pnl stays overall for the day)
+            apply_contract(leg, sel, dhan_row, angel_row)
             token_map[leg["token"]] = name
             leg["rolling"] = False
+
+            # push new strike LTP to telemetry right away
+            update_telemetry()
 
         if unsubscribe:
             try:
@@ -703,7 +840,9 @@ def roll_worker(name):
         logtradeleg(COMMON_ID, name, f"NIFTY {name} {sel['strike']}",
                     str(sel["strike"]), str(today), leg["token"])
 
-        print(f"✅ {name} ROLLED {old_token} -> {leg['token']} | lot {leg['lot']}")
+        print(f"✅ {name} STRIKE CHANGED {int(old_strike)} [{old_token}] -> "
+              f"{int(sel['strike'])} [{leg['token']}] | LTP {sel['ltp']} | lot {leg['lot']} | "
+              f"leg pnl {leg['pnl']:.2f}")
 
     except Exception as e:
         print(f"❌ {name} roll error:", e)
@@ -763,9 +902,11 @@ def on_message(msg):
 
         leg["prev_ltp"] = ltp
 
-        # ---- STRIKE ROLL (only when flat) ----
-        if not leg["position"] and ltp > ROLL_LTP and in_trade_window():
-            start_roll(leg)
+        # ---- STRIKE CHANGE (only when flat: > 280 or < 170) ----
+        if not leg["position"] and in_trade_window():
+            trigger = roll_trigger(ltp)
+            if trigger:
+                start_roll(leg, trigger)
 
         update_telemetry()
         check_mtm()
@@ -788,11 +929,14 @@ print(f"\n🚀 {STRATEGY_NAME} STARTED\n")
 refresh_users()
 threading.Thread(target=users_refresher, daemon=True).start()
 
+EXPIRY = get_expiry()
+print("📅 Expiry:", EXPIRY)
+
 for side in ("CE", "PE"):
     sel = None
     for attempt in range(20):
         try:
-            sel = select_strike(side)
+            sel = select_initial_strike(side, get_fresh_chain())
         except Exception as e:
             print(f"❌ {side} selection error:", e)
         if sel:
@@ -812,10 +956,16 @@ for side in ("CE", "PE"):
                 str(sel["strike"]), str(today), legs[side]["token"])
 
 
+if not EXPIRY:
+    EXPIRY = legs["CE"]["dhan_row"]["SM_EXPIRY_DATE"].strftime("%Y-%m-%d")
+    print("📅 Expiry (from FNO master):", EXPIRY)
+
+update_telemetry()
+
+
 # =====================
 # START FEED
 # =====================
 
 for t in list(token_map.keys()):
     subscribe(t, on_tick)
-
