@@ -57,7 +57,11 @@ PICK_MAX         = 280     #   PICK_MIN < ltp < PICK_MAX
 MAX_ROLL_STEPS   = 20      # max strikes to walk on one strike change
 NIFTY_SECURITY_ID = 13
 CHAIN_MIN_GAP    = 3.1     # Dhan option chain API: 1 call per 3 sec
-TARGET_POINTS    = 25      # fixed target per trade
+# Cumulative target PER SIDE (CE / PE separately, across all strikes of that side)
+#   side pnl (realized + running) >= target_points * LOTSIZE  -> exit
+#   after a hit: target_points += step, lot -> 2, fresh pivot touch needed
+CUM_TARGET_START_POINTS = 50   # first target  = 50 * 65 = ₹3,250
+CUM_TARGET_STEP_POINTS  = 50   # next targets  = ₹6,500, ₹9,750, ...
 SL_BUFFER        = 8       # tick SL = pivot - 8
 BASE_LOT         = 2
 MAX_LOT          = 15
@@ -76,7 +80,7 @@ today = datetime.now(IST).strftime("%Y-%m-%d")
 # LOGIN
 # =========================
 
-client_id = os.getenv("CLIENT_ID1")
+client_id = os.getenv("CLIENT_ID")
 access_token = get_access_token()
 
 dhan_context = DhanContext(client_id, access_token)
@@ -589,7 +593,8 @@ def init_leg(name):
         "entry_pivot": None,      # (name, value) used for this trade's SL
 
         "lot": BASE_LOT,
-        "pnl": 0.0,               # realized leg pnl
+        "pnl": 0.0,               # realized SIDE pnl (all strikes of this side)
+        "target_points": CUM_TARGET_START_POINTS,   # cumulative side target
         "ltp": 0.0,
 
         "trading_disabled": False,
@@ -658,8 +663,11 @@ def enter_position(leg, price, pivot):
     leg["entry_pivot"] = pivot
 
     reason = f"Pivot {pivot[0]} {pivot[1]} reclaim"
+    target_rs = leg["target_points"] * LOTSIZE
+    tgt_price = price + (target_rs - leg["pnl"]) / (LOTSIZE * leg["lot"])
     print(f"🟢 BUY {leg['name']} {int(leg['strike'])} @ {price} | lot {leg['lot']} | {reason} | "
-          f"TGT {price + TARGET_POINTS} | SL {round(pivot[1] - SL_BUFFER, 2)}")
+          f"SIDE TGT ₹{target_rs:.0f} (side pnl {leg['pnl']:.2f} -> ~price {tgt_price:.2f}) | "
+          f"SL {round(pivot[1] - SL_BUFFER, 2)}")
 
     run_async(emit_signal(build_payload(leg, "BUY", "entry", "ENTRY", price, leg["pnl"], realized_total())))
 
@@ -693,6 +701,12 @@ def exit_position(leg, price, reason, kind):
     # lot progression
     if kind == "TARGET":
         leg["lot"] = BASE_LOT
+        leg["target_points"] += CUM_TARGET_STEP_POINTS
+        # if the exit overshot by more than one step, move the bar above current pnl
+        while leg["target_points"] * LOTSIZE <= leg["pnl"]:
+            leg["target_points"] += CUM_TARGET_STEP_POINTS
+        print(f"🎯 {leg['name']} next side target -> {leg['target_points']} pts "
+              f"(₹{leg['target_points'] * LOTSIZE:.0f}) | lot -> {leg['lot']}")
     elif kind == "SL":
         leg["lot"] = min(leg["lot"] + 1, MAX_LOT)
         print(f"📈 {leg['name']} next lot -> {leg['lot']}")
@@ -743,8 +757,13 @@ def on_candle_close(leg, candle, ltp):
     return False
 
 def check_tick_exits(leg, ltp):
-    if ltp >= leg["entry_price"] + TARGET_POINTS:
-        exit_position(leg, ltp, f"Target {TARGET_POINTS} pts", "TARGET")
+    # ---- cumulative SIDE target (realized + running, across strikes) ----
+    target_rs = leg["target_points"] * LOTSIZE
+    side_total = leg["pnl"] + running_pnl(leg)
+    if side_total >= target_rs:
+        exit_position(leg, ltp,
+                      f"{leg['name']} side target {leg['target_points']} pts "
+                      f"(₹{target_rs:.0f}) | side pnl {side_total:.2f}", "TARGET")
         return True
 
     pivot = leg["entry_pivot"]
