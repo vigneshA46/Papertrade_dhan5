@@ -5,7 +5,7 @@ from dhanhq import dhanhq, DhanContext
 from dhan_token import get_access_token
 
 access_token = get_access_token()
-client_id = os.getenv("CLIENT_ID1")
+client_id = os.getenv("CLIENT_ID")
 
 dhan_context = DhanContext(client_id, access_token)
 dhan = dhanhq(dhan_context)
