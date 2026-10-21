@@ -414,6 +414,9 @@ idx = dhan.intraday_minute_data(
     to_date=today
 )
 
+print("🔍 DHAN INTRADAY RESPONSE:", idx.get("status"), "|", idx.get("remarks"), "|", str(idx.get("data"))[:300])
+
+
 
 data = idx.get("data", {})
 
