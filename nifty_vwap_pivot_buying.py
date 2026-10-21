@@ -52,7 +52,7 @@ load_dotenv()
 STRATEGY_NAME = "NIFTY_VWAP_PIVOT_BUYING"
 
 # 🔥 PUT THE NEW STRATEGY UUID HERE (deployments / logs / telemetry use this)
-COMMON_ID = "PUT-NEW-STRATEGY-UUID-HERE"
+COMMON_ID = "4737f626-a73f-480c-ba20-462e53a9e7d8"
 strategy_id = COMMON_ID
 
 SYMBOL = "NIFTY"

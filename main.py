@@ -27,8 +27,8 @@ import paper_trade_niftyoption50_no_reentry as strategy1
 option_chain_manager.update_option_chain()
 
 #import nifty_option_buying_pivot_cum_ltp as strategy14
-import nifty_index_based_pivot_buying as strategy16
-
+#import nifty_index_based_pivot_buying as strategy16
+import nifty_vwap_pivot_buying as strategy17
 
 #import nifty_rsa_ema_buying as strategy13
 #import paper_trade_niftyoption8_no_reentry as strategy8
