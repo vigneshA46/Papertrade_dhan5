@@ -7,36 +7,17 @@ from dotenv import load_dotenv
 import os
 import pytz
 import threading
-#import paper_trade_niftyoption50_reentry as strategy2
-#import paper_trade_niftyoption35_reentry as strategy3
-#import paper_trade_niftyoption35_reentry_point as strategy4
-#import paper_trade_niftyoption50_reentry_point as strategy5
-#import nifty_option_buying_50_ltp as strategy15
-#import nifty_option_buying_cumulative_ltp as straegy16
 
 
-#import delta_option_buying as strategy6
-
-
-#import Nifty_option_buying3k as strategy9
-#import Nifty_option_buying_tsl as strategy11
 import option_chain_manager
 
 import paper_trade_niftyoption50_no_reentry as strategy1
 
 option_chain_manager.update_option_chain()
 
-#import nifty_option_buying_pivot_cum_ltp as strategy14
-#import nifty_index_based_pivot_buying as strategy16
+import nifty_option_buying_pivot_cum_ltp as strategy14
+import nifty_index_based_pivot_buying as strategy16
 import nifty_vwap_pivot_buying as strategy17
-
-#import nifty_rsa_ema_buying as strategy13
-#import paper_trade_niftyoption8_no_reentry as strategy8
-#import nifty_option_buying_cul_lot2 as strategy12
-
-#import vwap_futures_buying as strategy7
-#import vwap_option_buying as strategy10
-
 
 
 rb_started = False
@@ -82,19 +63,6 @@ feed.run_forever()
 while True:
     try:
 
-
-            #ALL_TOKENS.update(strategy9.TOKENS)
-
-            #instruments = [
-                #(MarketFeed.NSE_FNO, token, MarketFeed.Quote)
-                #for (token) in ALL_TOKENS
-            #]
-
-            #feed = MarketFeed(dhan_context, instruments, "v2")
-
-            #feed.on_message = on_message
-
-            #rb_started = True
 
         data = feed.get_data()
 
