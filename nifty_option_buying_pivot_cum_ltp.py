@@ -33,7 +33,7 @@ STRATEGY_NAME = "NIFTY_OPTION_BUYING_PIVOT"
 
 # 🔥 PUT THE NEW STRATEGY UUID HERE (deployments / logs / telemetry use this)
 COMMON_ID = "4f62a290-efc7-4ed5-889d-0e10d1ed6a31"
-strategy_id = "4f62a290-efc7-4ed5-889d-0e10d1ed6a31"
+strategy_id = COMMON_ID
 
 SYMBOL = "NIFTY"
 
@@ -63,6 +63,7 @@ CHAIN_MIN_GAP    = 3.1     # Dhan option chain API: 1 call per 3 sec
 CUM_TARGET_START_POINTS = 50   # first target  = 50 * 65 = ₹3,250
 CUM_TARGET_STEP_POINTS  = 50   # next targets  = ₹6,500, ₹9,750, ...
 SL_BUFFER        = 8       # tick SL = pivot - 8
+TICK_ENTRY_POINTS = 12     # after pivot touch: any tick >= pivot + 12 -> entry
 BASE_LOT         = 2
 MAX_LOT          = 15
 MAX_LOSS         = -13000  # overall MTM (realized + running, both legs)
@@ -656,13 +657,14 @@ def update_telemetry():
 # ORDER EVENTS
 # =========================
 
-def enter_position(leg, price, pivot):
+def enter_position(leg, price, pivot, reason=None):
     leg["position"] = True
     leg["entry_price"] = price
     leg["entry_time"] = datetime.now(IST).isoformat()
     leg["entry_pivot"] = pivot
 
-    reason = f"Pivot {pivot[0]} {pivot[1]} reclaim"
+    if reason is None:
+        reason = f"Pivot {pivot[0]} {pivot[1]} reclaim"
     target_rs = leg["target_points"] * LOTSIZE
     tgt_price = price + (target_rs - leg["pnl"]) / (LOTSIZE * leg["lot"])
     print(f"🟢 BUY {leg['name']} {int(leg['strike'])} @ {price} | lot {leg['lot']} | {reason} | "
@@ -769,6 +771,19 @@ def check_tick_exits(leg, ltp):
     pivot = leg["entry_pivot"]
     if ltp <= pivot[1] - SL_BUFFER:
         exit_position(leg, ltp, f"Tick {ltp} <= {pivot[0]} {pivot[1]} - {SL_BUFFER}", "SL")
+        return True
+
+    return False
+
+def check_tick_entry(leg, ltp):
+    """After a pivot touch: any tick >= armed pivot + TICK_ENTRY_POINTS -> entry."""
+    pivot = leg["armed_pivot"]
+    if pivot is None or not in_trade_window():
+        return False
+
+    if ltp >= pivot[1] + TICK_ENTRY_POINTS:
+        enter_position(leg, ltp, pivot,
+                       f"Tick {ltp} >= {pivot[0]} {pivot[1]} + {TICK_ENTRY_POINTS}")
         return True
 
     return False
@@ -918,6 +933,10 @@ def on_message(msg):
         # ---- PIVOT TOUCH (only when flat, not on the exit tick) ----
         if not leg["position"] and not exited:
             update_touch(leg, ltp)
+
+        # ---- TICK BREAKOUT ENTRY (armed pivot + 12) ----
+        if not leg["position"] and not exited:
+            check_tick_entry(leg, ltp)
 
         leg["prev_ltp"] = ltp
 
