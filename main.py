@@ -19,6 +19,8 @@ import nifty_option_buying_pivot_cum_ltp as strategy14
 import nifty_index_based_pivot_buying as strategy16
 import nifty_vwap_pivot_buying as strategy17
 
+import nifty_pivot_10points_buying as strategy18
+import nifty_pivot_buffer_buying as strategy19
 
 rb_started = False
 rb_buying=False
