@@ -57,7 +57,7 @@ STRATEGY_NAME = "NIFTY_OPTION_BUYING_PIVOT_INDEX_BASED"
 
 # 🔥 PUT THE NEW STRATEGY UUID HERE (deployments / logs / telemetry use this)
 COMMON_ID = "d60a5587-5081-40d5-af6b-476c9a7f13bb"
-strategy_id = "d60a5587-5081-40d5-af6b-476c9a7f13bb"
+strategy_id = COMMON_ID
 
 SYMBOL = "NIFTY"
 
@@ -609,6 +609,7 @@ def init_leg(name):
         "lot": BASE_LOT,
         "pnl": 0.0,               # realized SIDE pnl (all strikes of this side)
         "target_points": CUM_TARGET_START_POINTS,   # cumulative side target
+        "sl_streak": 0,           # consecutive SL exits (reset on target)
         "ltp": 0.0,               # option ltp
 
         "trading_disabled": False,
@@ -710,6 +711,7 @@ def exit_position(leg, price, reason, kind):
     # lot progression
     if kind == "TARGET":
         leg["lot"] = BASE_LOT
+        leg["sl_streak"] = 0
         leg["target_points"] += CUM_TARGET_STEP_POINTS
         # if the exit overshot by more than one step, move the bar above current pnl
         while leg["target_points"] * LOTSIZE <= leg["pnl"]:
@@ -717,8 +719,13 @@ def exit_position(leg, price, reason, kind):
         print(f"🎯 {leg['name']} next side target -> {leg['target_points']} pts "
               f"(₹{leg['target_points'] * LOTSIZE:.0f}) | lot -> {leg['lot']}")
     elif kind == "SL":
-        leg["lot"] = min(leg["lot"] + 1, MAX_LOT)
-        print(f"📈 {leg['name']} next lot -> {leg['lot']}")
+        # lot +1 only on every 2nd consecutive SL (SL, SL -> +1, SL, SL -> +1 ...)
+        leg["sl_streak"] += 1
+        if leg["sl_streak"] % 2 == 0:
+            leg["lot"] = min(leg["lot"] + 1, MAX_LOT)
+            print(f"📈 {leg['name']} SL #{leg['sl_streak']} in a row -> next lot {leg['lot']}")
+        else:
+            print(f"➖ {leg['name']} SL #{leg['sl_streak']} in a row -> lot stays {leg['lot']}")
 
 def square_off_all(reason):
     global day_closed
