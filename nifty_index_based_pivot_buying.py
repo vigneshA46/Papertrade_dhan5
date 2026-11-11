@@ -61,6 +61,8 @@ strategy_id = COMMON_ID
 
 SYMBOL = "NIFTY"
 
+
+
 TRADE_LOG_URL = "https://algoapi.dreamintraders.in/api/paperlogger/event"
 EVENT_LOG_URL = "https://algoapi.dreamintraders.in/api/paperlogger/paperlogger"
 TELEMETRY_URL = "https://algoapi.dreamintraders.in/api/telemetry"
