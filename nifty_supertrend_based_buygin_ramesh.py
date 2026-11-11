@@ -23,12 +23,16 @@ from find_instrument import FindInstrument
 # Indicators        : EMA 5, EMA 10, Supertrend (10, 1.5)  [TradingView formula]
 # Marked line       : close of the 09:15-09:20 index candle
 #
-# CE entry (first CE of the day): close > marked line, EMA5 > EMA10, Supertrend BUY
-# CE entry (later CE entries)   : EMA5 > EMA10, Supertrend BUY
-# PE entry                      : mirror (close < marked first time, EMA5 < EMA10, ST SELL)
+# FIRST entry of the day (CE or PE, whichever comes first):
+#   CE : close > marked line, Supertrend BUY,  EMA5  > EMA10
+#   PE : close < marked line, Supertrend SELL, EMA10 > EMA5
+# NEXT entries (marked line no longer used, for both sides):
+#   CE : Supertrend BUY,  EMA5  > EMA10
+#   PE : Supertrend SELL, EMA10 > EMA5
 #
 # Strike  : at entry, 200 points ITM (CE = ATM - 200, PE = ATM + 200)
-# Lots    : 2 on the first entry of a side, +2 on every next entry of that side
+# Lots    : shared across CE and PE -> 2 on the 1st entry of the day, 4 on the 2nd,
+#           6 on the 3rd ... whichever side the entry is on
 # Exits   : trade pnl >= ₹3,000 -> book half, rest on Supertrend change
 #           Supertrend change before ₹3,000 -> exit all
 # Day     : +₹10,000 / -₹10,000 (realized + running, both sides, every tick)
@@ -510,14 +514,17 @@ def init_leg(name):
         "entry_time": None,
         "open_lots": 0,
         "half_booked": False,
-        "next_lots": BASE_LOT,     # 2, 4, 6 ...
-        "entries": 0,
+        "entries": 0,              # entries on this side (info only)
         "pnl": 0.0,                # realized for the day (incl. half bookings)
         "ltp": 0.0,
         "pending": None,           # waiting for first tick of a strike not yet in cache
     }
 
 legs = {"CE": init_leg("CE"), "PE": init_leg("PE")}
+
+# shared across both sides
+day_entries = 0          # entries taken today (CE + PE)
+next_lots = BASE_LOT     # 2, 4, 6 ... for the next entry on EITHER side
 ltp_cache = {}            # option security_id -> ltp
 option_tokens = set()     # option tokens this strategy listens to
 ready = False
@@ -590,7 +597,8 @@ def watch_option(token):
 # =========================
 
 def open_trade(leg, price, reason):
-    lots = leg["next_lots"]
+    global day_entries, next_lots
+    lots = next_lots
     leg["position"] = True
     leg["entry_price"] = price
     leg["entry_time"] = datetime.now(IST).isoformat()
@@ -598,10 +606,11 @@ def open_trade(leg, price, reason):
     leg["half_booked"] = False
     leg["ltp"] = price
     leg["entries"] += 1
-    leg["next_lots"] += LOT_STEP
+    day_entries += 1
+    next_lots += LOT_STEP
 
     print(f"🟢 BUY {leg['name']} {int(leg['strike'])} @ {price} | lots {lots} | {reason} | "
-          f"next {leg['name']} entry -> {leg['next_lots']} lots")
+          f"entry #{day_entries} of the day | next entry (CE or PE) -> {next_lots} lots")
 
     run_async(emit_signal(build_payload(leg, "BUY", "entry", "ENTRY", price, lots,
                                         leg["pnl"], realized_total())))
@@ -745,7 +754,7 @@ def on_index_candle():
 
     # ---- CE ENTRY ----
     if not ce["position"] and ce["pending"] is None:
-        first = ce["entries"] == 0
+        first = day_entries == 0
         ok = e5 > e10 and trend == 1 and (not first or close > marked)
         if ok:
             why = (f"close {close} > marked {marked}, " if first else "") + \
@@ -754,11 +763,11 @@ def on_index_candle():
 
     # ---- PE ENTRY ----
     if not pe["position"] and pe["pending"] is None:
-        first = pe["entries"] == 0
-        ok = e5 < e10 and trend == -1 and (not first or close < marked)
+        first = day_entries == 0
+        ok = e10 > e5 and trend == -1 and (not first or close < marked)
         if ok:
             why = (f"close {close} < marked {marked}, " if first else "") + \
-                  f"EMA5 {e5:.2f} < EMA10 {e10:.2f}, ST SELL"
+                  f"EMA10 {e10:.2f} > EMA5 {e5:.2f}, ST SELL"
             request_entry(pe, why)
 
 def completed_bucket_start(now=None):
