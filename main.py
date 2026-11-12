@@ -15,13 +15,13 @@ import paper_trade_niftyoption50_no_reentry as strategy1
 
 option_chain_manager.update_option_chain()
 
-##import nifty_option_buying_pivot_cum_ltp as strategy14
-##import nifty_index_based_pivot_buying as strategy16
-##import nifty_vwap_pivot_buying as strategy17
+import nifty_option_buying_pivot_cum_ltp as strategy14
+import nifty_index_based_pivot_buying as strategy16
+import nifty_vwap_pivot_buying as strategy17
 
-##import nifty_pivot_10points_buying as strategy18
-##import nifty_pivot_buffer_buying as strategy19
-import nifty_supertrend_based_buygin_ramesh as strategy20
+import nifty_pivot_10points_buying as strategy18
+import nifty_pivot_buffer_buying as strategy19
+#import nifty_supertrend_based_buygin_ramesh as strategy20
 
 rb_started = False
 rb_buying=False
