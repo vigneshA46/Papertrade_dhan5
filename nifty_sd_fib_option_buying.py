@@ -23,8 +23,9 @@ ENTRY  (1 lot, only one open position per option at a time)
          re-arms only when LTP trades back below it (e.g. after an SL hit).
          If several levels qualify at once, the highest one is used.
 
-EXIT   priority: TIME -> SL -> TARGET
-         SL     = level - SL_POINTS (20)
+EXIT   priority: TIME -> SL -> TARGET (every tick), SUPERTREND (5-min close)
+         SL     = entry price - SL_POINTS (20)
+         ST     = Supertrend(10, 2) on 5-min option chart flips to bearish -> exit
          TARGET = next level up (TGT-12 has none -> SL / time exit only)
          TIME   = all open trades closed at 15:14
 
@@ -50,7 +51,6 @@ from dhan_token import get_access_token
 from find_security import load_fno_master, find_option_security
 from find_instrument import FindInstrument
 from signal_emitter import emit_signal
-
 
 
 # ==========================================================
@@ -94,7 +94,10 @@ FIB_LEVELS = [
 
 # --- Entry / exit ---
 TICK_TRIGGER_POINTS = 8
-SL_POINTS = 20
+SL_POINTS = 20                   # below the ENTRY PRICE
+SUPERTREND_PERIOD = 10
+SUPERTREND_MULTIPLIER = 2
+SUPERTREND_HISTORY_DAYS = 5      # past days of 5-min candles used to warm up the Supertrend
 CANDLE_MINUTES = 5
 
 # --- Timings (IST) ---
@@ -466,10 +469,14 @@ def build_levels(open_price, option_vol):
 def print_levels(state):
     print(f"\n========== {state['leg_name']} {int(state['strike'])} LEVELS ==========")
     print(f"Open: {state['open']}   Vol: {state['option_vol'] * 100:.2f}%   1SD: {state['one_sd']}")
-    print(f"{'LEVEL':<12}{'FACTOR':>8}{'RANGE':>10}{'PRICE':>10}{'TRIGGER':>10}{'SL':>10}")
+    print(f"{'LEVEL':<12}{'FACTOR':>8}{'RANGE':>10}{'PRICE':>10}{'TRIGGER':>10}{'SL@TRIG':>10}")
     for lv in state["levels"]:
+        trigger = lv["price"] + TICK_TRIGGER_POINTS
         print(f"{lv['name']:<12}{lv['factor']:>8}{lv['fib_range']:>10.2f}{lv['price']:>10.2f}"
-              f"{lv['price'] + TICK_TRIGGER_POINTS:>10.2f}{lv['price'] - SL_POINTS:>10.2f}")
+              f"{trigger:>10.2f}{trigger - SL_POINTS:>10.2f}")
+    st = state["supertrend"]
+    print(f"Supertrend({SUPERTREND_PERIOD},{SUPERTREND_MULTIPLIER}): "
+          f"{st.trend_name()}  line {st.line()}  (warm: {st.ready})")
     print("=" * 60 + "\n")
 
 
@@ -504,6 +511,7 @@ def init_state(leg_name, token, strike, dhan_row, angel_row, option_vol):
         "last_ltp": None,
         "trading_disabled": False,
         "candle_builder": FiveMinuteCandleBuilder(),
+        "supertrend": SuperTrend(),
     }
 
 
@@ -553,6 +561,138 @@ class FiveMinuteCandleBuilder:
 
 
 # ==========================================================
+# SUPERTREND (10, 2) - TradingView method (hl2, Wilder ATR)
+# ==========================================================
+
+class SuperTrend:
+    """
+    update(candle) -> True only on the candle where trend flips UP -> DOWN.
+    trend: 1 = bullish (line below price), -1 = bearish (line above price)
+    """
+
+    def __init__(self, period=SUPERTREND_PERIOD, multiplier=SUPERTREND_MULTIPLIER):
+        self.period = period
+        self.multiplier = multiplier
+        self.count = 0
+        self.prev_close = None
+        self.tr_seed = []
+        self.atr = None
+        self.upper = None
+        self.lower = None
+        self.trend = 1
+
+    @property
+    def ready(self):
+        return self.atr is not None
+
+    def trend_name(self):
+        if not self.ready:
+            return "WARMING"
+        return "BULL" if self.trend == 1 else "BEAR"
+
+    def line(self):
+        if not self.ready:
+            return None
+        return round(self.lower if self.trend == 1 else self.upper, 2)
+
+    def update(self, candle):
+        high, low, close = candle["high"], candle["low"], candle["close"]
+
+        if self.prev_close is None:
+            tr = high - low
+        else:
+            tr = max(high - low, abs(high - self.prev_close), abs(low - self.prev_close))
+
+        # Wilder ATR (seed = SMA of first `period` TRs)
+        if self.atr is None:
+            self.tr_seed.append(tr)
+            if len(self.tr_seed) < self.period:
+                self.prev_close = close
+                return False
+            self.atr = sum(self.tr_seed) / self.period
+        else:
+            self.atr = (self.atr * (self.period - 1) + tr) / self.period
+
+        hl2 = (high + low) / 2
+        basic_upper = hl2 + self.multiplier * self.atr
+        basic_lower = hl2 - self.multiplier * self.atr
+
+        if self.upper is None:
+            self.upper, self.lower = basic_upper, basic_lower
+            self.prev_close = close
+            return False
+
+        prev_upper, prev_lower, prev_close = self.upper, self.lower, self.prev_close
+
+        self.lower = max(basic_lower, prev_lower) if prev_close > prev_lower else basic_lower
+        self.upper = min(basic_upper, prev_upper) if prev_close < prev_upper else basic_upper
+
+        prev_trend = self.trend
+        if self.trend == -1 and close > prev_upper:
+            self.trend = 1
+        elif self.trend == 1 and close < prev_lower:
+            self.trend = -1
+
+        self.prev_close = close
+        return prev_trend == 1 and self.trend == -1
+
+
+def load_option_history_5m(security_id):
+    """
+    Completed 5-min candles of the option from previous days (before today 09:15),
+    used only to warm up the Supertrend.
+    """
+    today = now_ist().date()
+    from_dt = datetime.combine(today - timedelta(days=SUPERTREND_HISTORY_DAYS + 4), dtime(9, 15))
+    to_dt = datetime.combine(today, dtime(9, 15))
+
+    try:
+        data = dhan.intraday_minute_data(
+            security_id=str(security_id),
+            exchange_segment="NSE_FNO",
+            instrument_type="OPTIDX",
+            from_date=from_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            to_date=to_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            interval=CANDLE_MINUTES,
+        )
+    except Exception as e:
+        print("History error:", e)
+        return []
+
+    raw = data.get("data", {}) if isinstance(data, dict) else {}
+    if not isinstance(raw, dict) or not raw.get("timestamp"):
+        print("❌ 5-min history unavailable:", data.get("remarks") if isinstance(data, dict) else data)
+        return []
+
+    candles = []
+    for i, ts in enumerate(raw["timestamp"]):
+        dt = datetime.fromtimestamp(ts, IST)
+        if dt.date() >= today:
+            continue
+        candles.append({
+            "datetime": dt,
+            "open": float(raw["open"][i]),
+            "high": float(raw["high"][i]),
+            "low": float(raw["low"][i]),
+            "close": float(raw["close"][i]),
+        })
+    candles.sort(key=lambda c: c["datetime"])
+    return candles
+
+
+def warm_up_supertrend(state):
+    candles = load_option_history_5m(state["token"])
+    for c in candles:
+        state["supertrend"].update(c)
+    st = state["supertrend"]
+    print(f"{state['leg_name']} Supertrend warmed with {len(candles)} candles -> "
+          f"{st.trend_name()} {st.line()}")
+    if not st.ready:
+        print(f"⚠️ {state['leg_name']} Supertrend needs {SUPERTREND_PERIOD} candles; "
+              f"exit by ST will start after that.")
+
+
+# ==========================================================
 # CORE ENGINE
 # ==========================================================
 
@@ -565,11 +705,7 @@ def rearm_levels(state, ltp):
 
 def enter_trade(state, level_idx, ltp, reason):
     lv = state["levels"][level_idx]
-    stoploss = round(lv["price"] - SL_POINTS, 2)
-
-    if ltp <= stoploss:
-        print(f"{state['leg_name']} skip entry @ {ltp}: already at/below SL {stoploss}")
-        return
+    stoploss = round(ltp - SL_POINTS, 2)
 
     # disarm the triggered level and everything below it that price is above
     for i, l in enumerate(state["levels"]):
@@ -672,11 +808,21 @@ def manage_positions(state, ltp, now):
 
 def on_candle_close(state, candle, ltp, now):
     c = candle
-    print(f"🕯️ {state['leg_name']} {CANDLE_MINUTES}M {c['datetime'].strftime('%H:%M')} "
-          f"O {c['open']} H {c['high']} L {c['low']} C {c['close']}")
+    st = state["supertrend"]
+    flipped_bearish = st.update(c)
 
-    if state["trading_disabled"] or not state["ready"] or state["position"]:
+    print(f"🕯️ {state['leg_name']} {CANDLE_MINUTES}M {c['datetime'].strftime('%H:%M')} "
+          f"O {c['open']} H {c['high']} L {c['low']} C {c['close']} | "
+          f"ST {st.trend_name()} {st.line()}")
+
+    if state["trading_disabled"] or not state["ready"]:
         return
+
+    # ---------- SUPERTREND EXIT ----------
+    if state["position"]:
+        if flipped_bearish:
+            exit_trade(state, ltp, f"SUPERTREND FLIP ({st.line()})")
+        return      # no fresh entry on the same candle close as an exit
     if TRADE_START <= now < ENTRY_CUTOFF:
         check_candle_entry(state, candle, ltp)
 
@@ -791,6 +937,9 @@ def main():
         )
         logtradeleg(leg_name, f"NIFTY {leg_name} {int(pick['strike'])}",
                     str(int(pick["strike"])), pick["security_id"])
+
+    for st in legs.values():
+        warm_up_supertrend(st)
 
     # ---------- live feed ----------
     instruments = [(MarketFeed.NSE_FNO, sid, MarketFeed.Quote) for sid in legs]
